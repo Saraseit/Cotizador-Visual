@@ -1,4 +1,4 @@
-import { Check, Library, LogOut, Package, Users } from 'lucide-react'
+import { Activity, Check, Library, LogOut, Package, Users } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 
@@ -82,9 +82,14 @@ export function Disposicion() {
               Biblioteca
             </Enlace>
             {perfil.data?.rol === 'admin' && (
-              <Enlace a="/usuarios" icono={<Users className="h-4 w-4" />}>
-                Usuarios
-              </Enlace>
+              <>
+                <Enlace a="/usuarios" icono={<Users className="h-4 w-4" />}>
+                  Usuarios
+                </Enlace>
+                <Enlace a="/estado" icono={<Activity className="h-4 w-4" />}>
+                  Estado
+                </Enlace>
+              </>
             )}
             <span
               className="hidden max-w-[180px] truncate px-2 text-sm text-texto-secundario xl:inline"

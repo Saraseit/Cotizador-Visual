@@ -13,6 +13,7 @@ import type {
   ResultadoGeneracion,
   ResultadoPdf,
   ResumenBiblioteca,
+  Salud,
   UsuarioActualizacion,
   UsuarioAdmin,
   UsuarioEntrada,
@@ -67,7 +68,23 @@ async function peticion<T>(ruta: string, opciones: RequestInit = {}): Promise<T>
 
 const json = (cuerpo: unknown, method = 'POST'): RequestInit => ({ method, body: JSON.stringify(cuerpo) })
 
+/** /api/salud no requiere sesión y responde 503 cuando Supabase no contesta; se lee el cuerpo igual. */
+async function salud(): Promise<Salud> {
+  let respuesta: Response
+  try {
+    respuesta = await fetch(`${BASE}/api/salud`)
+  } catch {
+    throw new ErrorApi(0, `No se pudo conectar con el backend en ${BASE}.`)
+  }
+  try {
+    return (await respuesta.json()) as Salud
+  } catch {
+    throw new ErrorApi(respuesta.status, `El backend respondió ${respuesta.status} sin diagnóstico.`)
+  }
+}
+
 export const api = {
+  salud,
   perfil: {
     yo: () => peticion<PerfilYo>('/perfil/yo'),
   },

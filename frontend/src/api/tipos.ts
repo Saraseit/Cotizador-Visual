@@ -6,6 +6,21 @@ export type TipoItem = 'catalogo' | 'ad_hoc'
 export type EstadoCotizacion = 'revision' | 'generada'
 export type EstadoItem = 'falta_imagen' | 'sugerida' | 'variante' | 'render_conceptual'
 
+// --- Salud ------------------------------------------------------------------
+
+export interface Verificacion {
+  ok: boolean
+  detalle: string
+}
+
+export interface Salud {
+  estado: 'ok' | 'degradado' | 'caido'
+  entorno: string
+  version: string
+  proveedor_imagenes: string
+  verificaciones: Record<string, Verificacion>
+}
+
 // --- Perfil y usuarios ------------------------------------------------------
 
 export interface PerfilYo {

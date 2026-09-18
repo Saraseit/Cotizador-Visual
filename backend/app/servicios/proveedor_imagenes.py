@@ -124,9 +124,10 @@ class ProveedorSimulado:
 
 
 def obtener_proveedor(config: Configuracion) -> ProveedorImagenes:
-    if config.proveedor_imagenes == "simulado":
+    proveedor = config.proveedor_efectivo  # 'openai' sin llave cae a 'simulado'
+    if proveedor == "simulado":
         return ProveedorSimulado(config.prompt_estilo_fijo)
-    if config.proveedor_imagenes == "openai":
+    if proveedor == "openai":
         if not config.openai_api_key:
             raise ErrorProveedorImagenes("Falta OPENAI_API_KEY para generar imágenes.")
         return ProveedorOpenAI(
@@ -135,4 +136,4 @@ def obtener_proveedor(config: Configuracion) -> ProveedorImagenes:
             prompt_estilo=config.prompt_estilo_fijo,
             calidad=config.openai_calidad_imagenes,
         )
-    raise ErrorProveedorImagenes(f"Proveedor de imágenes desconocido: '{config.proveedor_imagenes}'.")
+    raise ErrorProveedorImagenes(f"Proveedor de imágenes desconocido: '{proveedor}'.")

@@ -19,6 +19,12 @@ export const llaves = {
   usuarios: ['usuarios'] as const,
 }
 
+// --- Salud ------------------------------------------------------------------
+
+export function useSalud() {
+  return useQuery({ queryKey: ['salud'], queryFn: api.salud, retry: 0, refetchInterval: 60 * 1000 })
+}
+
 // --- Perfil -----------------------------------------------------------------
 
 export function usePerfil() {

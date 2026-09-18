@@ -6,6 +6,7 @@ import { ProveedorSesion, RutaProtegida } from '@/lib/sesion'
 import { Biblioteca } from '@/rutas/biblioteca/Biblioteca'
 import { Catalogo } from '@/rutas/catalogo/Catalogo'
 import { Entrar } from '@/rutas/entrar/Entrar'
+import { Estado } from '@/rutas/estado/Estado'
 import { Generar } from '@/rutas/generar/Generar'
 import { Revisar } from '@/rutas/revisar/Revisar'
 import { Subir } from '@/rutas/subir/Subir'
@@ -37,6 +38,7 @@ export function App() {
               <Route path="/catalogo" element={<Catalogo />} />
               <Route path="/biblioteca" element={<Biblioteca />} />
               <Route path="/usuarios" element={<Usuarios />} />
+              <Route path="/estado" element={<Estado />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

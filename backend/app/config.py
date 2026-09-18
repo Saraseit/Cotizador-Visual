@@ -54,14 +54,37 @@ class Configuracion(BaseSettings):
     limite_generaciones_diarias_global: int = 100
 
     # --- Servidor -----------------------------------------------------------
-    # Orígenes permitidos para CORS, separados por coma.
-    cors_origenes: str = "http://localhost:5173"
+    # Orígenes permitidos para CORS, separados por coma. Vacío: en 'desarrollo' se aceptan
+    # localhost:5173 y cualquier https://*.vercel.app; en 'produccion' es obligatorio.
+    cors_origenes: str = ""
     mapeo_columnas_ruta: str = "fixtures/mapeo_columnas.json"
     entorno: str = "desarrollo"
 
     @property
     def lista_cors(self) -> list[str]:
         return [o.strip() for o in self.cors_origenes.split(",") if o.strip()]
+
+    @property
+    def es_produccion(self) -> bool:
+        return self.entorno.strip().lower() in {"produccion", "producción", "production", "prod"}
+
+    @property
+    def proveedor_efectivo(self) -> str:
+        """'openai' sólo si hay llave; sin llave el backend cae a 'simulado' en vez de fallar."""
+        if self.proveedor_imagenes == "openai" and not (self.openai_api_key or "").strip():
+            return "simulado"
+        return self.proveedor_imagenes
+
+    def origenes_cors(self) -> tuple[list[str], str | None]:
+        """(lista de orígenes, regex opcional). Lanza RuntimeError si en producción falta la variable."""
+        if self.lista_cors:
+            return self.lista_cors, None
+        if self.es_produccion:
+            raise RuntimeError(
+                "ENTORNO=produccion exige CORS_ORIGENES con el dominio del frontend "
+                "(por ejemplo https://cotizador.vercel.app). Defínela en las variables de Railway."
+            )
+        return ["http://localhost:5173", "http://127.0.0.1:5173"], r"https://.*\.vercel\.app"
 
     @property
     def jwks_url(self) -> str:
