@@ -16,16 +16,18 @@ de un mapeo configurable (`fixtures/mapeo_columnas.json`):
       "metadatos": {                  # cómo obtener cliente y referencia
         "nombre_cliente":     {"celda": "B2", "regex": "Cliente:\\s*(.+)"},
         "referencia_externa": {"celda": "B3", "regex": "Referencia:\\s*(\\S+)"}
-      }
+      },
+      "pdf": {"estrategia": "auto"}   # auto | lineas | texto (ver _extraer_tablas_pdf)
     }
 
   - En .xlsx los metadatos se leen de `celda`; si no hay celda (o está vacía) se intenta `regex`
     sobre el texto de las primeras filas.
-  - En .pdf sólo aplica `regex` sobre el texto extraído. Las tablas se extraen con pdfplumber.
+  - En .pdf sólo aplica `regex` sobre el texto extraído. Las tablas se extraen con pdfplumber:
+    primero con la estrategia de líneas (tablas con bordes) y, si no encuentra ninguna, por
+    alineación de texto. El encabezado se busca en cualquier fila de la tabla.
 
-PUNTO DE EXTENSIÓN (PDF): `leer_pdf` asume que pdfplumber detecta la tabla y que su primera fila
-son los encabezados. Con el archivo real puede ser necesario ajustar `_extraer_tablas_pdf`
-(estrategia de detección de líneas, recorte de página, etc.). Está aislado a propósito.
+PUNTO DE EXTENSIÓN (PDF): si con el export real ninguna estrategia detecta la tabla, ajusta
+`_extraer_tablas_pdf` (recortes de página, líneas explícitas, etc.). Está aislado a propósito.
 """
 
 from __future__ import annotations
@@ -268,55 +270,92 @@ def _leer_metadatos_xlsx(hoja: Any, texto_cabecera: str, especificacion: dict[st
 # PDF
 # ---------------------------------------------------------------------------
 
-def _extraer_tablas_pdf(contenido: bytes) -> tuple[list[list[list[Any]]], str]:
-    """Devuelve (tablas, texto completo). Aquí se ajusta la estrategia con el archivo real."""
+# Ajustes de pdfplumber para tablas sin líneas dibujadas: detecta columnas por la alineación del texto.
+AJUSTES_PDF_TEXTO = {"vertical_strategy": "text", "horizontal_strategy": "text"}
+ESTRATEGIAS_PDF = {"auto": ("lineas", "texto"), "lineas": ("lineas",), "texto": ("texto",)}
+
+
+def _extraer_tablas_pdf(contenido: bytes, estrategia: str = "auto") -> tuple[list[list[list[Any]]], str, str]:
+    """Devuelve (tablas, texto completo, estrategia que encontró tablas).
+
+    Estrategias de pdfplumber:
+      - "lineas": la de por defecto; necesita bordes dibujados en la tabla.
+      - "texto":  columnas por alineación del texto; para exports sin bordes.
+      - "auto":   prueba "lineas" y, si no encuentra ninguna tabla, reintenta con "texto".
+
+    Se fuerza una desde el mapeo con `"pdf": {"estrategia": "lineas" | "texto"}` en
+    fixtures/mapeo_columnas.json. Si con el archivo real ninguna funciona, este es el punto
+    donde ajustar (recortes de página, `explicit_vertical_lines`, etc.).
+    """
     import pdfplumber
 
-    tablas: list[list[list[Any]]] = []
-    textos: list[str] = []
+    orden = ESTRATEGIAS_PDF.get(estrategia)
+    if orden is None:
+        raise ErrorParser(f"Estrategia de PDF desconocida '{estrategia}'. Usa 'auto', 'lineas' o 'texto'.")
+
     with pdfplumber.open(BytesIO(contenido)) as pdf:
-        for pagina in pdf.pages:
-            textos.append(pagina.extract_text() or "")
-            for tabla in pagina.extract_tables():
-                if tabla:
-                    tablas.append([[c if c is not None else "" for c in fila] for fila in tabla])
-    return tablas, "\n".join(textos)
+        texto = "\n".join(pagina.extract_text() or "" for pagina in pdf.pages)
+        for nombre in orden:
+            tablas: list[list[list[Any]]] = []
+            for pagina in pdf.pages:
+                encontradas = pagina.extract_tables(AJUSTES_PDF_TEXTO) if nombre == "texto" else pagina.extract_tables()
+                for tabla in encontradas:
+                    if tabla and len(tabla) >= 2:
+                        tablas.append([[c if c is not None else "" for c in fila] for fila in tabla])
+            if tablas:
+                return tablas, texto, nombre
+    return [], texto, orden[-1]
+
+
+def _limpiar_fila_pdf(fila: list[Any]) -> list[str]:
+    return [str(c).replace("\n", " ").strip() if c is not None else "" for c in fila]
 
 
 def leer_pdf(contenido: bytes, mapeo: dict[str, Any]) -> ExportLeido:
+    estrategia = str((mapeo.get("pdf") or {}).get("estrategia", "auto"))
     try:
-        tablas, texto = _extraer_tablas_pdf(contenido)
+        tablas, texto, usada = _extraer_tablas_pdf(contenido, estrategia)
+    except ErrorParser:
+        raise
     except Exception as error:
         raise ErrorParser(f"No se pudo leer el PDF: {error}") from error
     if not tablas:
-        raise ErrorParser("No se detectaron tablas en el PDF. Hay que ajustar la extracción para este formato.")
+        raise ErrorParser(
+            "No se detectaron tablas en el PDF (estrategia '" + usada + "'). "
+            "Prueba con \"pdf\": {\"estrategia\": \"texto\"} en el mapeo o ajusta _extraer_tablas_pdf."
+        )
 
     columnas = mapeo["columnas"]
     indices: dict[str, int] | None = None
     encabezado_normalizado: list[str] = []
     filas_datos: list[list[Any]] = []
     for tabla in tablas:
+        limpia = [_limpiar_fila_pdf(fila) for fila in tabla]
         if indices is None:
-            try:
-                indices = _resolver_columnas(tabla[0], columnas)
-                encabezado_normalizado = [normalizar_texto(c) for c in tabla[0]]
-                filas_datos.extend(tabla[1:])
-                continue
-            except ErrorParser:
-                continue  # esta tabla no es la de ítems
+            # El encabezado puede no ser la primera fila (con la estrategia por texto la tabla
+            # suele arrastrar las líneas de cabecera del documento).
+            for posicion, fila in enumerate(limpia):
+                try:
+                    indices = _resolver_columnas(fila, columnas)
+                except ErrorParser:
+                    continue
+                encabezado_normalizado = [normalizar_texto(c) for c in fila]
+                filas_datos.extend(limpia[posicion + 1 :])
+                break
+            continue
         # Tablas siguientes (otras páginas): se salta el encabezado repetido.
-        for fila in tabla:
+        for fila in limpia:
             if [normalizar_texto(c) for c in fila] == encabezado_normalizado:
                 continue
             filas_datos.append(fila)
 
     if indices is None:
-        raise ErrorParser("Ninguna tabla del PDF tiene las columnas del mapeo. Revisa fixtures/mapeo_columnas.json.")
+        raise ErrorParser(
+            f"Ninguna tabla del PDF (estrategia '{usada}') tiene las columnas del mapeo. Revisa fixtures/mapeo_columnas.json."
+        )
 
-    advertencias: list[str] = []
-    # Las celdas de PDF suelen traer saltos de línea internos.
-    limpias = [[str(c).replace("\n", " ").strip() if c is not None else "" for c in fila] for fila in filas_datos]
-    items = _filas_desde_tabla(limpias, indices, advertencias)
+    advertencias: list[str] = [f"PDF leído con la estrategia '{usada}'."]
+    items = _filas_desde_tabla(filas_datos, indices, advertencias)
 
     metadatos = {
         campo: _metadato_por_regex(texto, spec.get("regex"))

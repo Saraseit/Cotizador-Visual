@@ -120,24 +120,55 @@ def test_normalizar_texto():
     assert normalizar_texto("DESCRIPCIÓN") == "descripcion"
 
 
-def test_pdf_con_tabla(mapeo):
-    """Genera un PDF con WeasyPrint y lo vuelve a leer con pdfplumber (ida y vuelta)."""
+_FILAS_PDF = """
+  <tr><th>Código</th><th>Descripción</th><th>Cantidad</th><th>Precio</th></tr>
+  <tr><td>SIL-001</td><td>Silla Tiffany blanca</td><td>10</td><td>45.00</td></tr>
+  <tr><td>MES-002</td><td>Mesa redonda 1.80 m</td><td>4</td><td>250.00</td></tr>
+  <tr><td>ADHOC</td><td>Letrero a medida</td><td>1</td><td>2200.00</td></tr>
+"""
+
+
+def _pdf_desde_html(estilo_tabla: str) -> bytes:
     from tests.conftest import requerir_weasyprint
 
     weasyprint = requerir_weasyprint()
-    html = """
-    <html><body style="font-family: sans-serif">
+    html = f"""
+    <html><head><style>
+      body {{ font-family: sans-serif; font-size: 11pt; }}
+      table {{ border-collapse: collapse; width: 100%; }}
+      td, th {{ padding: 4pt 8pt; text-align: left; {estilo_tabla} }}
+    </style></head><body>
       <p>Cliente: Cliente PDF</p><p>Referencia: COT-PDF-1</p>
-      <table border="1" style="border-collapse: collapse; width: 100%">
-        <tr><th>Código</th><th>Descripción</th><th>Cantidad</th><th>Precio</th></tr>
-        <tr><td>SIL-001</td><td>Silla Tiffany blanca</td><td>10</td><td>45.00</td></tr>
-        <tr><td></td><td>Letrero a medida</td><td>1</td><td>2200.00</td></tr>
-      </table>
+      <table>{_FILAS_PDF}</table>
     </body></html>
     """
-    pdf = weasyprint.HTML(string=html).write_pdf()
-    leido = leer_export(pdf, "export.pdf", mapeo)
+    return weasyprint.HTML(string=html).write_pdf()
+
+
+def _verificar_pdf(leido, estrategia_esperada: str) -> None:
     assert leido.nombre_cliente == "Cliente PDF"
     assert leido.referencia_externa == "COT-PDF-1"
-    assert [f.codigo for f in leido.filas] == ["SIL-001", ""]
-    assert leido.filas[1].precio_unitario == Decimal("2200.00")
+    assert [f.codigo for f in leido.filas] == ["SIL-001", "MES-002", "ADHOC"]
+    assert leido.filas[2].precio_unitario == Decimal("2200.00")
+    assert leido.filas[1].cantidad == Decimal("4")
+    assert any(f"estrategia '{estrategia_esperada}'" in a for a in leido.advertencias)
+
+
+def test_pdf_con_tabla(mapeo):
+    """PDF con bordes reales (CSS): lo detecta la estrategia de líneas de pdfplumber."""
+    pdf = _pdf_desde_html("border: 1px solid #000;")
+    _verificar_pdf(leer_export(pdf, "export.pdf", mapeo), "lineas")
+
+
+def test_pdf_sin_bordes_usa_estrategia_de_texto(mapeo):
+    """PDF sin bordes (sólo texto alineado): la estrategia de líneas no encuentra nada y cae a texto."""
+    pdf = _pdf_desde_html("border: none;")
+    _verificar_pdf(leer_export(pdf, "export.pdf", mapeo), "texto")
+
+
+def test_pdf_estrategia_forzada_desde_el_mapeo(mapeo):
+    pdf = _pdf_desde_html("border: none;")
+    forzado = {**mapeo, "pdf": {"estrategia": "texto"}}
+    _verificar_pdf(leer_export(pdf, "export.pdf", forzado), "texto")
+    with pytest.raises(ErrorParser, match="desconocida"):
+        leer_export(pdf, "export.pdf", {**mapeo, "pdf": {"estrategia": "magia"}})

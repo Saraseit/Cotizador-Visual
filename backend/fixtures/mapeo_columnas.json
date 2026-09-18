@@ -3,7 +3,8 @@
     "Mapeo del export del sistema de la empresa. Ajustar cuando se conozca el archivo real.",
     "columnas: campo interno -> texto del encabezado (se compara sin acentos ni mayúsculas).",
     "metadatos: en .xlsx se lee 'celda'; si está vacía se usa 'regex' sobre las filas previas al encabezado. En .pdf sólo aplica 'regex'.",
-    "fila_encabezados es 1-based. El fixture de ejemplo tiene título y datos del cliente en las filas 1-3."
+    "fila_encabezados es 1-based. El fixture de ejemplo tiene título y datos del cliente en las filas 1-3.",
+    "pdf.estrategia: 'auto' (líneas y luego texto), 'lineas' (tablas con bordes) o 'texto' (columnas por alineación)."
   ],
   "formato": "xlsx",
   "hoja": 0,
@@ -15,7 +16,16 @@
     "precio_unitario": "Precio"
   },
   "metadatos": {
-    "nombre_cliente": { "celda": "B2", "regex": "Cliente:?\\s*(.+)$" },
-    "referencia_externa": { "celda": "B3", "regex": "(?:Referencia|Cotizaci[oó]n)\\s*(?:No\\.?|#)?:?\\s*([A-Za-z0-9-]+)" }
+    "nombre_cliente": {
+      "celda": "B2",
+      "regex": "Cliente:?\\s*(.+)$"
+    },
+    "referencia_externa": {
+      "celda": "B3",
+      "regex": "(?:Referencia|Cotizaci[oó]n)\\s*(?:No\\.?|#)?:?\\s*([A-Za-z0-9-]+)"
+    }
+  },
+  "pdf": {
+    "estrategia": "auto"
   }
 }
