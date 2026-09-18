@@ -19,6 +19,8 @@ Ambos despliegan solos con cada push a `main`. El backend corre con `ENTORNO=des
 | `backend/Dockerfile` | Imagen Python 3.12 con Pango, Cairo, HarfBuzz, DejaVu e IBM Plex Sans (copiada desde `backend/app/fuentes`, licencia OFL) para WeasyPrint. El contexto de build es la raíz del repo. Escucha en `$PORT`. |
 | `frontend/vercel.json` | Rewrite de todas las rutas a `index.html` para React Router. Vercel detecta Vite solo cuando el Root Directory es `frontend`. |
 | `.github/workflows/ci.yml` | En cada push y PR corre `pytest` (con las librerías de WeasyPrint), el build del frontend y el build de la imagen Docker con una prueba de render de PDF. No despliega. |
+| `INDISPENSABLE.env.example` | Las únicas variables sin valor por defecto. |
+| `backend/scripts/arrancar.py` | Todo lo que se hace una sola vez después del primer deploy. |
 
 ### Por qué no hay `railway.toml` ni `vercel.json` en la raíz
 
@@ -35,8 +37,6 @@ Ambos despliegan solos con cada push a `main`. El backend corre con `ENTORNO=des
 | Settings → Deploy → Healthcheck Path | `/api/salud` |
 | Settings → Deploy → Restart Policy | `On failure` |
 | Settings → Networking | *Generate Domain* |
-| `INDISPENSABLE.env.example` | Las únicas variables sin valor por defecto. |
-| `backend/scripts/arrancar.py` | Todo lo que se hace una sola vez después del primer deploy. |
 
 ## Variables
 
