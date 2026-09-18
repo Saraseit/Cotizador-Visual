@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+
+# Node
+node_modules/
+frontend/dist/
+
+# Entorno
+.env
+.env.local
+*.local
+
+# Editor / SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Salidas locales de desarrollo
+backend/salidas/
+backend/fixtures/imagenes_ejemplo/
