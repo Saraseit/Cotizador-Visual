@@ -1,35 +1,75 @@
 # Cotizador visual
 
-Herramienta interna de **Minimal 4.0** (Mérida, Yucatán) para convertir el export de cotizaciones del sistema de la empresa en una propuesta visual para el cliente.
+Herramienta interna de **Minimal 4.0** (Mérida, Yucatán) para convertir el export de cotizaciones del sistema de la empresa en una propuesta visual (PDF con imágenes) para el cliente.
 
-El flujo que resuelve:
+## Deploy en 5 pasos
+
+Sólo necesitas los valores de `INDISPENSABLE.env.example`. Todo lo demás tiene valor por defecto.
+
+1. **Backend en Railway.** Entra a <https://railway.com/new>, elige *Deploy from GitHub repo* y selecciona `Saraseit/Cotizador-Visual`. Railway lee `railway.toml` de la raíz y construye con `backend/Dockerfile`; no cambies el Root Directory.
+2. **Variables del backend.** En el servicio recién creado abre la pestaña *Variables* → *Raw Editor* y pega (rellenando los valores):
+
+   ```
+   SUPABASE_URL=                 # Supabase → Project Settings → API → Project URL
+   SUPABASE_SERVICE_ROLE_KEY=    # Supabase → Project Settings → API Keys → service_role
+   OPENAI_API_KEY=               # platform.openai.com → API keys (vacío = proveedor simulado)
+   ```
+
+   Luego *Settings → Networking → Generate Domain* y copia la URL (la usarás en el paso 4). Espera a que el deploy quede en verde: el healthcheck es `/api/salud`.
+3. **Frontend en Vercel.** Entra a <https://vercel.com/new>, importa el mismo repo y déjalo con el Root Directory en la raíz: `vercel.json` ya construye `frontend/`.
+4. **Variables del frontend.** En la misma pantalla de importación (o después en *Settings → Environment Variables*) pega:
+
+   ```
+   VITE_SUPABASE_URL=            # mismo valor que SUPABASE_URL
+   VITE_SUPABASE_ANON_KEY=       # Supabase → Project Settings → API Keys → anon / publishable
+   VITE_API_URL=                 # la URL de Railway del paso 2, sin barra final
+   ```
+
+   Pulsa *Deploy*. El backend acepta cualquier dominio `*.vercel.app` mientras `ENTORNO` sea `desarrollo` (el valor por defecto), así que no hay que tocar CORS.
+5. **Arranque.** En tu máquina, con Python 3.12+:
+
+   ```bash
+   pip install -e ./backend
+   python backend/scripts/arrancar.py
+   ```
+
+   Te pide lo que falte, aplica migraciones pendientes, crea el primer admin, siembra el catálogo de ejemplo si quieres, llama a `/api/salud` del backend desplegado y te deja un resumen. Después entra al frontend con ese admin y abre **Estado**.
+
+Detalles, todas las variables, cómo actualizar y los tres ajustes manuales que no se pudieron eliminar: [docs/DEPLOY.md](docs/DEPLOY.md).
+
+## Qué hace
 
 1. Ventas arma la cotización en el sistema de la empresa y exporta el archivo (.xlsx o .pdf).
-2. Sube ese archivo aquí. La herramienta lee los ítems, los cruza contra el catálogo y asigna la imagen oficial de cada uno desde una biblioteca compartida.
-3. El vendedor ajusta sólo lo que falta: elige otra imagen de la biblioteca, sube una foto o genera un render conceptual con IA a partir de la foto oficial.
-4. Descarga el PDF final para el cliente.
+2. Lo sube aquí. La herramienta lee los ítems, los cruza contra el catálogo y asigna la imagen oficial de cada uno desde una biblioteca compartida.
+3. El vendedor ajusta sólo lo que falta: elige otra imagen, sube una foto o genera un render conceptual con IA a partir de la foto oficial.
+4. Descarga el PDF para el cliente.
 
-Estado: **piloto desplegable**. Las funciones principales funcionan de punta a punta; la identidad de marca del PDF y el "Diseño con IA" (Fase 2) quedan para después.
+Estado: **alfa desplegable**. La identidad de marca del PDF y el "Diseño con IA" (Fase 2) quedan para después.
 
 ## Estructura
 
 ```
 cotizador-visual/
 ├── README.md
+├── INDISPENSABLE.env.example     # las 6 variables sin valor por defecto
 ├── .env.example                  # todas las variables, con comentario
+├── railway.toml                  # build del backend desde la raíz
+├── vercel.json                   # build del frontend desde la raíz
+├── .github/workflows/ci.yml      # pytest + build en cada push
+├── docs/DEPLOY.md
 ├── backend/                      # FastAPI + supabase-py + WeasyPrint
-│   ├── Dockerfile                # imagen con Pango/Cairo para WeasyPrint
-│   ├── railway.toml
+│   ├── Dockerfile
 │   ├── pyproject.toml
 │   ├── app/
 │   │   ├── main.py               # app, CORS, routers
-│   │   ├── config.py             # settings desde variables de entorno
+│   │   ├── config.py             # settings con valores por defecto sanos
 │   │   ├── auth.py               # validación del JWT de Supabase + perfil
 │   │   ├── db/                   # cliente de Supabase y esquemas Pydantic
 │   │   ├── routers/              # salud, perfil, cotizaciones, catalogo, imagenes, biblioteca, usuarios
 │   │   ├── servicios/            # parser_export, matching, catalogo_texto, render_pdf, proveedor_imagenes, storage
 │   │   └── plantillas/propuesta_base.html
 │   ├── scripts/
+│   │   ├── arrancar.py           # primer arranque en un comando
 │   │   ├── cargar_catalogo.py    # seeding idempotente de catálogo e imágenes
 │   │   ├── crear_usuario.py      # alta de usuarios desde la terminal
 │   │   ├── prueba_punta_a_punta.py  # prueba de humo contra la API real
@@ -37,173 +77,86 @@ cotizador-visual/
 │   │   └── generar_export_ejemplo.py
 │   ├── fixtures/
 │   │   ├── export_ejemplo.xlsx   # export sintético (12 filas)
-│   │   ├── catalogo_ejemplo.csv  # 15 ítems
+│   │   ├── catalogo_ejemplo.csv  # 15 ítems de ejemplo
+│   │   ├── catalogo_plantilla.csv  # sólo encabezados: para el catálogo real
 │   │   └── mapeo_columnas.json   # mapeo configurable del export
 │   └── tests/
 ├── frontend/                     # React 18 + Vite + TypeScript + Tailwind
-│   ├── vercel.json               # rewrite para React Router
 │   └── src/
-│       ├── rutas/                # entrar, subir, revisar, generar, catalogo, biblioteca, usuarios
+│       ├── rutas/                # entrar, subir, revisar, generar, catalogo, biblioteca, usuarios, estado
 │       ├── componentes/
 │       ├── api/                  # cliente HTTP tipado + hooks de TanStack Query
 │       └── lib/                  # supabase, sesión, formato
-└── supabase/migrations/          # esquema, RLS, buckets, endurecimiento, catálogo extendido
+└── supabase/migrations/          # 7 migraciones: esquema, RLS, buckets, catálogo, generaciones, linter
 ```
-
-## Requisitos
-
-- Python 3.12+ (el Dockerfile usa 3.12; en local funciona con 3.13).
-- Node 20+ y npm.
-- Un proyecto de Supabase (Postgres + Auth + Storage).
-- Para generar PDFs **en local en Windows**: WeasyPrint necesita el runtime de GTK3 (Pango, Cairo). Instálalo desde <https://github.com/tschoonj/GTK-for-Windows-Runtime-Environment-Installer> (silencioso: `gtk3-runtime.exe /S /D=C:\Users\<tu-usuario>\AppData\Local\GTK3-Runtime`). El backend lo detecta solo si está en esa ruta o en `C:\Program Files\GTK3-Runtime Win64`; en otra ruta define `WEASYPRINT_DLL_DIRECTORIES`. Sin GTK el backend arranca y todo funciona salvo `POST /cotizaciones/{id}/generar` (devuelve 500 con un mensaje claro) y dos pruebas se omiten. En Docker/Railway ya viene todo.
-- Opcional: una API key de OpenAI para generar imágenes. Sin ella, usa `PROVEEDOR_IMAGENES=simulado`.
-
-## Configuración inicial
-
-### 1. Supabase
-
-Proyecto actual: **cotizador-visual** (ref `rwtlgueqvncrnucyfymq`, región us-east-1, organización "Saraseit's Org"). Las cuatro migraciones ya están aplicadas y firma tokens con ES256, así que `SUPABASE_JWT_SECRET` no hace falta.
-
-1. Copia de *Project Settings → API*: la URL, la **anon/publishable key** y la **service role key**.
-2. Aplica las migraciones de `supabase/migrations/` en orden. Dos opciones:
-   - Con la CLI: `supabase link --project-ref <ref>` y `supabase db push`.
-   - Pegando cada archivo en el *SQL Editor* del dashboard.
-
-   Las migraciones crean las tablas, las políticas RLS, la función `resumen_biblioteca` y los buckets privados `imagenes` y `exports`.
-3. Crea los usuarios (no hay registro desde la app). Lo más rápido es el script, que también fija nombre y rol:
-
-   ```bash
-   cd backend
-   python scripts/crear_usuario.py --correo ana@empresa.com --contrasena "Secreta123!" --nombre "Ana" --rol vendedor
-   ```
-
-   También puedes hacerlo en *Authentication → Users*; al primer acceso se les crea su fila en `perfiles` con rol `vendedor`. Para hacer admin a alguien, cambia `rol` a `admin` en la tabla o vuelve a correr el script con `--rol admin`.
-4. Firma de tokens: en *Project Settings → JWT Keys* revisa si el proyecto usa llaves asimétricas (ES256, por defecto en proyectos nuevos) o el secret heredado (HS256). Con ES256 no hace falta nada más. Con HS256 copia el *Legacy JWT Secret* a `SUPABASE_JWT_SECRET`.
-
-### 2. Variables de entorno
-
-```bash
-cp .env.example .env            # backend (se lee desde la raíz o desde backend/)
-cp .env.example frontend/.env   # frontend: sólo importan las VITE_*
-```
-
-Rellena al menos `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`. Cada variable está explicada en `.env.example`.
 
 ## Correr en local
 
-### Backend
+Requisitos: Python 3.12+ (en local funciona con 3.13), Node 20+, un proyecto de Supabase. Para generar PDFs en Windows hace falta el runtime de GTK3 (ver "WeasyPrint en Windows" abajo); en Docker, Railway y CI ya viene todo.
 
 ```bash
+cp INDISPENSABLE.env.example .env       # rellena los valores; las VITE_* también van en frontend/.env
 python -m venv .venv
 # Windows: .venv\Scripts\activate    macOS/Linux: source .venv/bin/activate
 pip install -e "./backend[dev]"
-cd backend
-uvicorn app.main:app --port 8000
+python backend/scripts/arrancar.py --sin-salud   # migraciones, primer admin, catálogo de ejemplo
+
+cd backend && uvicorn app.main:app --port 8000   # http://localhost:8000/api/salud y /docs
+cd frontend && npm install && npm run dev        # http://localhost:5173
 ```
 
-`--reload` funciona, pero en algunas terminales de Windows el recargador se queda colgado tras el primer cambio; si pasa, reinicia el proceso a mano.
-
-- Salud: <http://localhost:8000/api/salud>
-- Documentación interactiva: <http://localhost:8000/docs> (usa el botón *Authorize* con un `access_token` de Supabase).
-
-### Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev     # http://localhost:5173
-```
+`uvicorn --reload` funciona, pero en algunas terminales de Windows el recargador se cuelga tras el primer cambio; si pasa, reinicia a mano.
 
 ### Pruebas
 
 ```bash
-cd backend
-pytest
+cd backend && pytest
 ```
 
-Cubren el parser (xlsx y pdf), el matching y el render del PDF. Las que necesitan WeasyPrint se omiten si faltan sus librerías nativas.
+Cubren parser (xlsx y pdf con y sin bordes), matching, carga por texto, normalización de imágenes, rutas de Storage, configuración y render del PDF. Las que necesitan WeasyPrint se omiten si faltan sus librerías nativas.
 
-Con el backend corriendo y el catálogo sembrado, la prueba de humo recorre el criterio de terminado completo contra la API real (sube el export, elige variante, sube fotos, genera 4 opciones, descarga el PDF a `backend/salidas/`):
+Con el backend corriendo y un admin creado, la prueba de humo recorre el flujo completo contra la API real (subir export, elegir variante, subir fotos, generar y borrar opciones, catálogo, usuarios, PDF a `backend/salidas/`):
 
 ```bash
-python scripts/prueba_punta_a_punta.py --correo piloto@minimal40.local --contrasena "..."
+python scripts/prueba_punta_a_punta.py --correo <tu-admin> --contrasena "..."
 ```
+
+### WeasyPrint en Windows
+
+Instala el runtime de GTK3 desde <https://github.com/tschoonj/GTK-for-Windows-Runtime-Environment-Installer> (silencioso: `gtk3-runtime.exe /S /D=C:\Users\<tu-usuario>\AppData\Local\GTK3-Runtime`). El backend lo detecta solo en esa ruta o en `C:\Program Files\GTK3-Runtime Win64`; en otra, define `WEASYPRINT_DLL_DIRECTORIES`. Sin GTK todo funciona salvo generar el PDF, y `/api/salud` lo muestra en rojo.
 
 ## Seeding del catálogo
 
+Llena `backend/fixtures/catalogo_plantilla.csv` con tu catálogo real (columnas `codigo,nombre,categoria` obligatorias; `descripcion,medidas,etiquetas,costo_reposicion` opcionales, etiquetas separadas por `|`), pon las fotos en una carpeta nombradas por código (`SIL-001.jpg` la oficial, `SIL-001-1.jpg`, `SIL-001-2.jpg` variantes) y corre el comando:
+
 ```bash
 cd backend
-python scripts/cargar_catalogo.py --csv fixtures/catalogo_ejemplo.csv --imagenes fixtures/imagenes_ejemplo --crear-placeholders
+python scripts/cargar_catalogo.py --csv fixtures/catalogo_plantilla.csv --imagenes /ruta/a/las/fotos
 ```
 
-- El CSV lleva columnas `codigo,nombre,categoria`.
-- La carpeta de imágenes usa `<codigo>.jpg|png|webp` para la foto oficial y `<codigo>-1.jpg`, `<codigo>-2.jpg` para variantes.
-- `--crear-placeholders` genera PNG grises con el código para los ítems sin archivo (desarrollo). Deja TAR-001 y CAR-001 sin imagen a propósito para que la pantalla Biblioteca tenga datos.
-- Es idempotente: los ítems se hacen upsert por código y las imágenes se identifican por su ruta en Storage. Al final imprime cuántos ítems creó/actualizó, cuántas imágenes subió y qué archivos no pudo asociar.
-
-Con datos reales: exporta el catálogo a un CSV con esas tres columnas, nombra las fotos con el código y corre el mismo comando sin `--crear-placeholders`.
+- Idempotente: los ítems se hacen upsert por código y las imágenes se identifican por su ruta en Storage. Imprime cuántos ítems creó o actualizó, cuántas imágenes subió y qué archivos no pudo asociar.
+- El catálogo de ejemplo (15 ítems) se siembra con `--csv fixtures/catalogo_ejemplo.csv --imagenes fixtures/imagenes_ejemplo --crear-placeholders`, que genera PNG grises con el código (TAR-001 y CAR-001 quedan sin foto a propósito para que Biblioteca tenga datos). Es lo que ofrece `arrancar.py`.
+- También se puede cargar desde el frontend: **Catálogo → Carga por texto** acepta líneas pegadas desde Excel.
 
 ## Pantallas
 
-- **Subir** (`/`): arrastrar el export; lista de propuestas recientes.
-- **Revisar** (`/cotizaciones/:id`): tabla con pendientes arriba; "Elegir imagen" abre dos pestañas para cualquier ítem: *Biblioteca* (o *Subir foto* en ítems fuera de catálogo) y *Generar imagen con IA*. La base para generar es la foto oficial; si el ítem no tiene ninguna, la pestaña ofrece subir una y la usa.
+- **Subir** (`/`): arrastrar el export; propuestas recientes.
+- **Revisar** (`/cotizaciones/:id`): tabla con pendientes arriba; "Elegir imagen" abre *Biblioteca* (o *Subir foto* en ítems fuera de catálogo) y *Generar imagen con IA*. Al elegir una de las 4 opciones generadas, las otras 3 se borran. Si se alcanza el tope diario, el aviso ámbar dice cuál límite y cuándo se libera.
 - **Generar** (`/cotizaciones/:id/generar`): descarga del PDF; tarjeta "Diseño con IA" en Fase 2.
-- **Catálogo** (`/catalogo`): buscador y tabla con foto, medidas, etiquetas, un precio por lista y costo de reposición. "Nuevo ítem" abre el formulario completo; al guardar aparece la sección de imágenes (subir oficial o variante, generar con IA). "Carga por texto" acepta líneas `código; nombre; categoría; descripción; medidas; costo; etiqueta|etiqueta` pegadas desde Excel. "Listas de precios" crea, renombra o desactiva listas.
-- **Biblioteca** (`/biblioteca`): métricas e ítems más cotizados sin foto.
-- **Usuarios** (`/usuarios`, sólo admin): alta con correo y contraseña, nombre, rol, cambio de contraseña y baja.
+- **Catálogo** (`/catalogo`): tabla con foto, medidas, etiquetas, un precio por lista y costo de reposición; formulario completo con sección de imágenes (oficial, variantes, generar con IA); carga por texto; listas de precios.
+- **Biblioteca** (`/biblioteca`): cinco métricas (incluye generaciones en 24 h) e ítems más cotizados sin foto.
+- **Usuarios** (`/usuarios`, admin): alta, rol, contraseña y baja.
+- **Estado** (`/estado`, admin): el diagnóstico de `/api/salud` con círculo verde o rojo por dependencia. Lo primero que hay que abrir tras un deploy.
 
 ## Cómo funciona
 
-- **Parser** (`servicios/parser_export.py`): lee `fixtures/mapeo_columnas.json` para saber en qué hoja, fila y columnas están los datos y de qué celdas salen cliente y referencia. Los encabezados se comparan sin acentos ni mayúsculas. Para PDF usa `pdfplumber` con la misma interfaz; el punto de ajuste con el archivo real es `_extraer_tablas_pdf`.
-- **Matching** (`servicios/matching.py`): exacto por código normalizado (mayúsculas, sin espacios). Con match asigna la imagen oficial; si no hay, la variante con más usos; si no hay ninguna, deja el ítem pendiente. Sin match, el ítem se guarda como `ad_hoc` sin descartarlo.
-- **Imágenes generadas** (`servicios/proveedor_imagenes.py`): interfaz `ProveedorImagenes`; `ProveedorOpenAI` usa el endpoint de edición de `gpt-image-1` con la foto oficial como base, `input_fidelity="high"` y un prompt fijo (forma y proporciones intactas, ángulo de tres cuartos, fondo neutro, luz lateral, sin texto ni personas) más la petición del vendedor. Genera 4 variantes. Si el proveedor falla, la API responde 502 y la cotización no se toca.
-- **PDF** (`servicios/render_pdf.py` + `plantillas/propuesta_base.html`): tamaño carta, tabla con miniaturas incrustadas como data URI (reducidas a 640 px), marcador "Sin imagen", etiqueta "Render conceptual" y leyenda al pie cuando aplica.
-- **Reglas en base de datos**: un trigger incrementa `imagenes.usos` al asignar una imagen a un ítem y marca `es_render_conceptual` cuando la imagen es `generada`. Así la regla se cumple aunque se escriba desde otro lado.
-- **Auth**: el frontend inicia sesión con Supabase Auth y manda el `access_token` como Bearer. El backend lo valida (JWKS o secret HS256) y usa la service role key para la base y Storage, aplicando en código las mismas reglas que las políticas RLS. Las imágenes y PDFs se sirven con URLs firmadas de 10 minutos.
-
-## Despliegue
-
-Nada se despliega automáticamente; estos son los pasos.
-
-### Backend en Railway
-
-1. Nuevo servicio desde el repo de GitHub. En *Settings → Root Directory* pon `backend`. Railway detecta `railway.toml` y construye con el `Dockerfile`.
-2. Variables (*Settings → Variables*):
-
-   | Variable | Valor |
-   |---|---|
-   | `SUPABASE_URL` | URL del proyecto |
-   | `SUPABASE_SERVICE_ROLE_KEY` | service role key |
-   | `SUPABASE_JWT_SECRET` | sólo si el proyecto firma con HS256 |
-   | `PROVEEDOR_IMAGENES` | `openai` |
-   | `OPENAI_API_KEY` | API key |
-   | `OPENAI_CALIDAD_IMAGENES` | `medium` (o `low` para abaratar) |
-   | `CORS_ORIGENES` | `https://<tu-app>.vercel.app` (varios separados por coma) |
-   | `ENTORNO` | `produccion` |
-
-   `PORT` lo inyecta Railway. El resto tiene valores por defecto (ver `.env.example`).
-3. Genera un dominio público en *Settings → Networking*. El healthcheck está en `/api/salud`.
-
-### Frontend en Vercel
-
-1. Nuevo proyecto desde el repo. *Root Directory* = `frontend`, framework Vite. Build `npm run build`, salida `dist`.
-2. Variables:
-
-   | Variable | Valor |
-   |---|---|
-   | `VITE_SUPABASE_URL` | URL del proyecto |
-   | `VITE_SUPABASE_ANON_KEY` | anon/publishable key |
-   | `VITE_API_URL` | dominio del backend en Railway, sin barra final |
-
-3. `frontend/vercel.json` ya tiene el rewrite para que React Router maneje las rutas.
-4. Vuelve a Railway y agrega el dominio de Vercel a `CORS_ORIGENES`.
-
-### Después del primer deploy
-
-1. Crear los usuarios en Supabase Auth.
-2. Correr el seeding con el CSV y las fotos reales (desde tu máquina, con el `.env` apuntando al proyecto).
-3. Pedir un export real del sistema y ajustar `backend/fixtures/mapeo_columnas.json` (hoja, fila de encabezados, nombres de columnas, celdas de cliente y referencia). Si el export es PDF, revisar `_extraer_tablas_pdf`.
-4. Subir un export, revisar, generar un PDF y validar con ventas.
+- **Parser** (`servicios/parser_export.py`): lee `fixtures/mapeo_columnas.json` (hoja, fila de encabezados, columnas, celdas o regex de cliente y referencia). Para PDF usa pdfplumber: primero la estrategia de líneas y, si no hay tablas, la de texto (`pdf.estrategia` en el mapeo la fuerza). El encabezado se busca en cualquier fila.
+- **Matching** (`servicios/matching.py`): exacto por código normalizado. Con match asigna la imagen oficial; si no hay, la variante con más usos; si no hay ninguna, deja el ítem pendiente. Sin match, el ítem se guarda como `ad_hoc`.
+- **Imágenes generadas** (`servicios/proveedor_imagenes.py`): la base se normaliza a PNG RGBA de máximo 1024 px; `ProveedorOpenAI` usa la edición de `gpt-image-1` con `input_fidelity="high"` y un prompt fijo (forma intacta, tres cuartos, fondo neutro, luz lateral) más la petición del vendedor. Sin `OPENAI_API_KEY` actúa `ProveedorSimulado`. Cada llamada se registra en `generaciones` y hay tope diario por usuario y global (429 con la hora de liberación).
+- **PDF** (`servicios/render_pdf.py` + `plantillas/propuesta_base.html`): carta, miniaturas incrustadas como data URI, marcador "Sin imagen", etiqueta "Render conceptual" y leyenda al pie.
+- **Reglas en base de datos**: un trigger incrementa `imagenes.usos` al asignar una imagen y marca `es_render_conceptual` cuando es `generada`.
+- **Auth**: el frontend inicia sesión con Supabase Auth y manda el `access_token`. El backend lo valida (JWKS ES256 o secret HS256, con 60 s de tolerancia de reloj) y usa la service role key para base y Storage aplicando en código las mismas reglas que las políticas RLS. Imágenes y PDFs se sirven con URLs firmadas de 10 minutos.
+- **Salud** (`/api/salud`): un renglón por dependencia; 503 sólo si Supabase no responde, para que Railway detecte el arranque y todo lo demás se pueda leer.
 
 ## Endpoints
 
@@ -211,53 +164,55 @@ Prefijo `/api`. Todos requieren `Authorization: Bearer <token de Supabase>` salv
 
 | Método | Ruta | Qué hace |
 |---|---|---|
-| GET | `/salud` | Estado del servicio |
+| GET | `/salud` | Diagnóstico: Supabase, buckets, WeasyPrint, proveedor, mapeo, catálogo, usuarios |
 | POST | `/cotizaciones` | multipart `archivo` → crea cotización + ítems + matching |
 | GET | `/cotizaciones` | Cotizaciones del usuario (admin: todas) |
 | GET | `/cotizaciones/{id}` | Detalle con ítems, imagen (URL firmada) y estado |
 | PATCH | `/cotizaciones/{id}/items/{item_id}` | `{imagen_id}` asigna o quita (`null`) la imagen |
 | POST | `/cotizaciones/{id}/generar` | Renderiza el PDF, lo guarda en `exports` y devuelve URL firmada |
-| GET | `/perfil/yo` | Perfil del usuario autenticado (nombre, rol, correo) |
-| GET | `/catalogo/items?buscar=` | Búsqueda por código, nombre o categoría, con precios e imagen oficial |
-| POST | `/catalogo/items` | Alta por formulario: código, nombre, categoría, descripción, medidas, etiquetas, costo de reposición, precios por lista |
-| PATCH | `/catalogo/items/{id}` | Edición parcial (mismos campos; `precios` reemplaza el conjunto) |
-| POST | `/catalogo/items/carga-texto` | Alta rápida: `{texto}` con una línea por ítem; upsert por código |
-| GET | `/catalogo/items/{id}` | Detalle de un ítem |
+| GET | `/perfil/yo` | Perfil del usuario autenticado |
+| GET/POST | `/catalogo/items` | Búsqueda con precios e imagen oficial / alta por formulario |
+| GET/PATCH | `/catalogo/items/{id}` | Detalle / edición parcial (`precios` reemplaza el conjunto) |
+| POST | `/catalogo/items/carga-texto` | `{texto}` con una línea por ítem; upsert por código sin borrar datos existentes |
 | GET | `/catalogo/items/{id}/imagenes` | Imágenes del ítem: oficial primero, luego por usos |
-| GET/POST | `/catalogo/listas-precios` | Listas de precios (Público, Distribuidor, …) |
-| PATCH | `/catalogo/listas-precios/{id}` | Renombrar, ordenar o desactivar una lista |
+| GET/POST | `/catalogo/listas-precios` | Listas de precios |
+| PATCH | `/catalogo/listas-precios/{id}` | Renombrar, ordenar o desactivar |
 | POST | `/imagenes` | multipart `archivo` (+ `item_id`, `etiquetas`, `tipo`) |
-| POST | `/imagenes/generar` | `{imagen_base_id, peticion, item_id?}` → 4 imágenes `generada` (sin `item_id` para ítems ad hoc) |
+| POST | `/imagenes/generar` | `{imagen_base_id, peticion, item_id?, cotizacion_id?}` → 4 imágenes `generada`; 429 si se alcanzó el tope |
+| DELETE | `/imagenes/{id}` | Borra una imagen generada sin asignar (del mismo usuario o admin) |
 | GET | `/biblioteca/resumen` | Métricas de la biblioteca |
-| GET/POST | `/usuarios` | Sólo admin: lista y alta de usuarios (correo, contraseña, nombre, rol) |
-| PATCH/DELETE | `/usuarios/{id}` | Sólo admin: nombre, rol, contraseña; baja. No permite borrarse ni degradarse a sí mismo |
+| GET/POST | `/usuarios` | Admin: lista y alta |
+| PATCH/DELETE | `/usuarios/{id}` | Admin: nombre, rol, contraseña; baja |
 
 ## Decisiones tomadas
 
-Cosas que no estaban definidas y se resolvieron sobre la marcha:
-
-- **Acceso a datos con `supabase-py` (cliente async)** en lugar de SQLAlchemy: un solo cliente para Postgres, Storage y validación; menos piezas para el piloto.
-- **El backend usa la service role key** y aplica la autorización en código (dueño o admin para escribir cotizaciones). Las políticas RLS quedan activas para proteger el acceso directo con la anon key.
-- **`usos` y `es_render_conceptual` se mantienen con un trigger** en `cotizacion_items` (ver migración 0001), no en Python, para que la regla sea única.
-- **Cantidades y precios se exponen como `float`** en la API (la base los guarda como `numeric`). Es una herramienta de presentación, no contable.
-- **Fila de encabezados del fixture en la fila 5** (`fila_encabezados: 5`), con título y datos de cliente en las filas 1-3, para que las celdas B2/B3 del mapeo tengan sentido.
-- **Las filas de resumen ("Total", "Subtotal", "IVA") sin código se omiten** al leer el export; las que tienen descripción pero no código se conservan como ítems ad hoc.
-- **Sólo las imágenes `oficial` y `variante` se sugieren automáticamente**; las `generada` nunca se asignan sin que el vendedor las elija.
-- **Una imagen oficial por ítem** (índice único). Si el seeding encuentra una segunda, la guarda como variante y lo avisa.
-- **Proveedor `simulado`** (`PROVEEDOR_IMAGENES=simulado`) para desarrollar el flujo de generación sin gastar créditos: devuelve la imagen base con un tinte y una etiqueta.
-- **Las miniaturas del PDF se incrustan como data URI** reducidas a 640 px, para que WeasyPrint no dependa de la red y el archivo no pese demasiado.
-- **`gpt-image-1` con `quality=medium` e `input_fidelity=high`** por defecto; la calidad se cambia por variable de entorno.
-- **Sin registro de usuarios ni recuperación de contraseña** en la app; se gestiona desde Supabase.
-- **Listas de precios como tabla propia** (`listas_precios` + `precios_items`) en vez de un JSON en el ítem, para poder renombrarlas y consultarlas. Los precios del catálogo son de referencia: en la cotización manda el precio que trae el export.
-- **La carga por texto nunca borra datos**: un campo vacío en la línea conserva lo que el ítem ya tenía; sólo se sobrescribe lo que viene con valor.
-- **Generar con IA sin ítem de catálogo**: para ítems ad hoc la base es la foto que se subió; las imágenes generadas quedan sin `item_id` y sólo se usan en esa cotización.
-- **Validación del JWT tolerante al reloj**: `leeway=60` y sin verificar `iat` (la expiración sí se verifica), porque un desfase de pocos segundos entre la máquina y Supabase rechazaba tokens recién emitidos.
-- **Usuario de prueba del piloto**: `piloto@minimal40.local` con rol admin, creado con `scripts/crear_usuario.py`; cámbiale la contraseña o bórralo antes de usar datos reales.
-- **Codificación de commits y archivos en UTF-8 con finales de línea LF** (`.gitattributes`), para que el Dockerfile y los scripts funcionen igual en Windows y Linux.
+- **Acceso a datos con `supabase-py` (cliente async)** en lugar de SQLAlchemy: un solo cliente para Postgres, Storage y Auth.
+- **El backend usa la service role key** y aplica la autorización en código. Las políticas RLS quedan activas para el acceso directo con la anon key.
+- **`usos` y `es_render_conceptual` se mantienen con un trigger**, no en Python.
+- **Cantidades y precios se exponen como `float`** en la API; la base los guarda como `numeric`.
+- **Fila de encabezados del fixture en la fila 5**, con título y datos del cliente en las filas 1-3.
+- **Las filas de resumen ("Total", "Subtotal", "IVA") sin código se omiten** al leer el export.
+- **Sólo las imágenes `oficial` y `variante` se sugieren automáticamente**; las `generada` nunca se asignan solas.
+- **Una imagen oficial por ítem** (índice único).
+- **Proveedor `simulado`** para desarrollar sin créditos; es también a lo que cae `openai` sin llave, en vez de fallar el arranque.
+- **Miniaturas del PDF como data URI** reducidas a 640 px; **imagen base para IA** normalizada a PNG RGBA de 1024 px.
+- **`gpt-image-1` con `quality=medium` e `input_fidelity=high`** por defecto.
+- **Sin registro ni recuperación de contraseña** en la app; el admin gestiona usuarios desde la pantalla Usuarios.
+- **Listas de precios como tabla propia**; los precios del catálogo son de referencia y en la cotización manda el export.
+- **La carga por texto nunca borra datos**: un campo vacío conserva lo existente.
+- **Generar con IA sin ítem de catálogo**: para ítems ad hoc la base es la foto subida.
+- **Tope de generaciones en tabla `generaciones`**, no en memoria: sobrevive reinicios y cuenta llamadas, no imágenes. Los admin no están exentos.
+- **Borrado de generadas no elegidas desde el frontend** con `Promise.allSettled`: si un borrado falla, la elección no se afecta.
+- **Validación del JWT tolerante al reloj** (`leeway=60`, sin verificar `iat`).
+- **CORS por defecto acepta `*.vercel.app` en desarrollo** para que el primer deploy no requiera configurar dominios; producción lo exige explícito.
+- **`/api/salud` devuelve 503 sólo si Supabase falla**: el resto en rojo devuelve 200 con detalle, para que el servicio arranque y se pueda diagnosticar.
+- **Migración extra `0007_migraciones_aplicadas`** (no estaba en la lista de la sesión 2): una función que lee `schema_migrations` para que `arrancar.py` sepa qué falta sin necesitar la contraseña de la base. Aplicarlas desde el script sí necesita `SUPABASE_DB_URL` (psycopg); sin ella indica cómo hacerlo a mano.
+- **Configuración de Railway y Vercel en la raíz** (`railway.toml` con `dockerfilePath`, `vercel.json` con comandos que entran a `frontend/`), para no cambiar el Root Directory en ninguno.
+- **Codificación UTF-8 con finales de línea LF** (`.gitattributes`).
 
 ## Pendientes conocidos
 
-- Ajustar `mapeo_columnas.json` (y posiblemente `_extraer_tablas_pdf`) con el export real.
+- Ajustar `mapeo_columnas.json` con el export real.
 - Identidad de marca en `propuesta_base.html`.
-- "Diseño con IA" (Fase 2): la tarjeta existe deshabilitada en la pantalla Generar.
-- Paginación y búsqueda en la lista de propuestas si crece mucho (hoy se muestran las últimas 100).
+- "Diseño con IA" (Fase 2): la tarjeta existe deshabilitada.
+- Paginación en la lista de propuestas si crece mucho (hoy las últimas 100).
