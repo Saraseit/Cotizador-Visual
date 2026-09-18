@@ -79,6 +79,8 @@ class PeticionGenerarImagen(BaseModel):
     imagen_base_id: UUID
     peticion: str = Field(min_length=3, max_length=600)
     item_id: UUID | None = None
+    # Sólo informativo, para el registro de generaciones.
+    cotizacion_id: UUID | None = None
 
 
 class ResultadoGeneracion(BaseModel):
@@ -232,6 +234,7 @@ class ResumenBiblioteca(BaseModel):
     porcentaje_con_oficial: float = 0
     total_variantes: int = 0
     total_generadas: int = 0
+    total_generaciones_24h: int = 0
     total_sin_imagen: int = 0
     items_sin_imagen: list[ItemSinImagen] = Field(default_factory=list)
 

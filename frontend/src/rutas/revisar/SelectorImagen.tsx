@@ -62,7 +62,7 @@ export function SelectorImagen({ item, cotizacionId, alCerrar }: Props) {
       {pestana === 'biblioteca' ? (
         <PestanaBiblioteca item={item} esAdHoc={esAdHoc} alElegir={elegir} ocupado={asignar.isPending} />
       ) : (
-        <PestanaGenerar item={item} esAdHoc={esAdHoc} alElegir={elegir} ocupado={asignar.isPending} />
+        <PestanaGenerar item={item} esAdHoc={esAdHoc} cotizacionId={cotizacionId} alElegir={elegir} ocupado={asignar.isPending} />
       )}
     </Modal>
   )
@@ -226,11 +226,13 @@ function PestanaBiblioteca({
 function PestanaGenerar({
   item,
   esAdHoc,
+  cotizacionId,
   alElegir,
   ocupado,
 }: {
   item: CotizacionItem
   esAdHoc: boolean
+  cotizacionId: string
   alElegir: (imagenId: string | null, cerrar?: boolean) => void
   ocupado: boolean
 }) {
@@ -254,6 +256,7 @@ function PestanaGenerar({
     <PanelGenerar
       imagenBase={base}
       itemId={item.item_id}
+      cotizacionId={cotizacionId}
       etiquetaBase={base ? `Base: ${base.tipo} de ${item.item?.codigo ?? (item.codigo_origen || 'este ítem')}` : undefined}
       alElegir={(imagenId) => alElegir(imagenId)}
       ocupado={ocupado}

@@ -124,7 +124,7 @@ _FILAS_PDF = """
   <tr><th>Código</th><th>Descripción</th><th>Cantidad</th><th>Precio</th></tr>
   <tr><td>SIL-001</td><td>Silla Tiffany blanca</td><td>10</td><td>45.00</td></tr>
   <tr><td>MES-002</td><td>Mesa redonda 1.80 m</td><td>4</td><td>250.00</td></tr>
-  <tr><td>ADHOC</td><td>Letrero a medida</td><td>1</td><td>2200.00</td></tr>
+  <tr><td></td><td>Letrero a medida</td><td>1</td><td>2200.00</td></tr>
 """
 
 
@@ -148,7 +148,7 @@ def _pdf_desde_html(estilo_tabla: str) -> bytes:
 def _verificar_pdf(leido, estrategia_esperada: str) -> None:
     assert leido.nombre_cliente == "Cliente PDF"
     assert leido.referencia_externa == "COT-PDF-1"
-    assert [f.codigo for f in leido.filas] == ["SIL-001", "MES-002", "ADHOC"]
+    assert [f.codigo for f in leido.filas] == ["SIL-001", "MES-002", ""]
     assert leido.filas[2].precio_unitario == Decimal("2200.00")
     assert leido.filas[1].cantidad == Decimal("4")
     assert any(f"estrategia '{estrategia_esperada}'" in a for a in leido.advertencias)

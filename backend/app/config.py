@@ -49,6 +49,9 @@ class Configuracion(BaseSettings):
     openai_calidad_imagenes: str = "medium"
     variantes_por_generacion: int = 4
     prompt_estilo_fijo: str = PROMPT_ESTILO_POR_DEFECTO
+    # Topes de llamadas al proveedor en una ventana de 24 h (cada llamada cuenta 1, produzca las imágenes que produzca).
+    limite_generaciones_diarias_usuario: int = 20
+    limite_generaciones_diarias_global: int = 100
 
     # --- Servidor -----------------------------------------------------------
     # Orígenes permitidos para CORS, separados por coma.

@@ -106,7 +106,7 @@ export const api = {
       if (parametros.tipo) datos.append('tipo', parametros.tipo)
       return peticion<Imagen>('/imagenes', { method: 'POST', body: datos })
     },
-    generar: (cuerpo: { imagen_base_id: string; peticion: string; item_id?: string | null }) =>
+    generar: (cuerpo: { imagen_base_id: string; peticion: string; item_id?: string | null; cotizacion_id?: string | null }) =>
       peticion<ResultadoGeneracion>('/imagenes/generar', json(cuerpo)),
   },
   biblioteca: {

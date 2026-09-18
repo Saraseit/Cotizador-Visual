@@ -1,6 +1,7 @@
 import { Sparkles } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 
+import { ErrorApi } from '@/api/cliente'
 import { useGenerarImagenes } from '@/api/consultas'
 import type { Imagen } from '@/api/tipos'
 import { Aviso, mensajeDeError } from '@/componentes/Aviso'
@@ -24,6 +25,8 @@ interface Props {
   imagenBase: Imagen | null
   /** Ítem del catálogo al que pertenecen; null para ítems ad hoc. */
   itemId: string | null
+  /** Cotización desde la que se genera (sólo para el registro de generaciones). */
+  cotizacionId?: string | null
   etiquetaBase?: string
   /** Si se pasa, cada resultado tiene un botón para elegirlo; si no, sólo se guardan en la biblioteca. */
   alElegir?: (imagenId: string) => void
@@ -32,7 +35,7 @@ interface Props {
   sinBase?: ReactNode
 }
 
-export function PanelGenerar({ imagenBase, itemId, etiquetaBase, alElegir, ocupado = false, sinBase }: Props) {
+export function PanelGenerar({ imagenBase, itemId, cotizacionId = null, etiquetaBase, alElegir, ocupado = false, sinBase }: Props) {
   const generar = useGenerarImagenes()
   const [peticion, setPeticion] = useState('')
 
@@ -54,10 +57,12 @@ export function PanelGenerar({ imagenBase, itemId, etiquetaBase, alElegir, ocupa
   }
 
   const lanzar = () => {
-    generar.mutate({ imagen_base_id: imagenBase.id, peticion: peticion.trim(), item_id: itemId })
+    generar.mutate({ imagen_base_id: imagenBase.id, peticion: peticion.trim(), item_id: itemId, cotizacion_id: cotizacionId })
   }
 
   const resultados = generar.data?.imagenes ?? []
+  // 429 = tope diario alcanzado: el backend explica cuál límite y cuándo se libera.
+  const topeAlcanzado = generar.error instanceof ErrorApi && generar.error.estado === 429
 
   return (
     <div className="grid gap-6 md:grid-cols-[200px_1fr]">
@@ -104,7 +109,7 @@ export function PanelGenerar({ imagenBase, itemId, etiquetaBase, alElegir, ocupa
           {generar.isPending && <p className="mt-2 text-xs text-texto-secundario">Esto tarda entre 30 y 90 segundos.</p>}
         </div>
 
-        {generar.isError && <Aviso tono="error">{mensajeDeError(generar.error)}</Aviso>}
+        {generar.isError && <Aviso tono={topeAlcanzado ? 'ambar' : 'error'}>{mensajeDeError(generar.error)}</Aviso>}
 
         {resultados.length > 0 && (
           <div className="flex flex-col gap-3">

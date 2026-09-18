@@ -73,7 +73,7 @@ export function Biblioteca() {
         </p>
       </header>
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <Metrica
           titulo="Ítems activos con foto oficial"
           valor={`${datos.porcentaje_con_oficial}%`}
@@ -81,6 +81,7 @@ export function Biblioteca() {
         />
         <Metrica titulo="Variantes" valor={String(datos.total_variantes)} detalle="Subidas por el equipo" />
         <Metrica titulo="Renders generados" valor={String(datos.total_generadas)} detalle="Imágenes conceptuales con IA" />
+        <Metrica titulo="Generaciones en 24 h" valor={String(datos.total_generaciones_24h)} detalle="Llamadas al proveedor de IA" />
         <Metrica titulo="Sin ninguna imagen" valor={String(datos.total_sin_imagen)} detalle="Ítems activos del catálogo" />
       </div>
 

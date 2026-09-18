@@ -167,6 +167,7 @@ export interface ResumenBiblioteca {
   porcentaje_con_oficial: number
   total_variantes: number
   total_generadas: number
+  total_generaciones_24h: number
   total_sin_imagen: number
   items_sin_imagen: ItemSinImagen[]
 }

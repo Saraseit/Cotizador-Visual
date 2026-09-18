@@ -1,7 +1,9 @@
 """Imágenes: subir a la biblioteca y generar variantes con IA."""
 
+from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any
 from uuid import UUID, uuid4
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, status
 
@@ -34,6 +36,48 @@ async def _codigo_del_item(db: Any, item_id: UUID | None) -> str | None:
     if not respuesta.data:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "El ítem del catálogo no existe.")
     return str(respuesta.data[0]["codigo"])
+
+
+VENTANA_TOPE = timedelta(hours=24)
+
+
+async def _contar_generaciones(db: Any, desde: datetime, usuario_id: str | None = None) -> tuple[int, datetime | None]:
+    """Devuelve (total en la ventana, fecha de la más antigua en la ventana)."""
+    consulta = db.table("generaciones").select("creado_en", count="exact").gte("creado_en", desde.isoformat())
+    if usuario_id:
+        consulta = consulta.eq("usuario_id", usuario_id)
+    respuesta = await consulta.order("creado_en").limit(1).execute()
+    total = int(respuesta.count or 0)
+    mas_antigua = None
+    if respuesta.data:
+        mas_antigua = datetime.fromisoformat(str(respuesta.data[0]["creado_en"]).replace("Z", "+00:00"))
+    return total, mas_antigua
+
+
+def _texto_liberacion(mas_antigua: datetime | None) -> str:
+    if mas_antigua is None:
+        return "en menos de 24 h"
+    libera = (mas_antigua + VENTANA_TOPE).astimezone(ZoneInfo("America/Merida"))
+    return f"a las {libera.strftime('%H:%M')} del {libera.strftime('%d/%m/%Y')} (hora de Mérida)"
+
+
+async def _verificar_tope_generaciones(db: Any, usuario: Any, config: Configuracion) -> None:
+    """Topes diarios por usuario y globales; se cuentan las llamadas de las últimas 24 h. Nadie está exento."""
+    desde = datetime.now(timezone.utc) - VENTANA_TOPE
+    propias, antigua_propia = await _contar_generaciones(db, desde, str(usuario.id))
+    if propias >= config.limite_generaciones_diarias_usuario:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            f"Alcanzaste tu límite de {config.limite_generaciones_diarias_usuario} generaciones con IA en 24 h. "
+            f"Se libera un cupo {_texto_liberacion(antigua_propia)}.",
+        )
+    globales, antigua_global = await _contar_generaciones(db, desde)
+    if globales >= config.limite_generaciones_diarias_global:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            f"Se alcanzó el límite global de {config.limite_generaciones_diarias_global} generaciones con IA en 24 h "
+            f"para todo el equipo. Se libera un cupo {_texto_liberacion(antigua_global)}.",
+        )
 
 
 def _ruta_imagen(codigo: str | None, extension: str, subcarpeta: str = "") -> str:
@@ -106,11 +150,26 @@ async def generar_imagenes(
     except ErrorProveedorImagenes as error:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(error)) from error
 
+    await _verificar_tope_generaciones(db, usuario, config)
+
     bytes_base = await storage.descargar(storage.bucket_imagenes, imagen_base["ruta_storage"])
     try:
         variantes = await proveedor.generar_variantes(bytes_base, cuerpo.peticion, config.variantes_por_generacion)
     except ErrorProveedorImagenes as error:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(error)) from error
+
+    # Se registra sólo cuando el proveedor respondió bien: un fallo no consume cupo.
+    await db.table("generaciones").insert(
+        {
+            "usuario_id": str(usuario.id),
+            "cotizacion_id": str(cuerpo.cotizacion_id) if cuerpo.cotizacion_id else None,
+            "imagen_base_id": str(cuerpo.imagen_base_id),
+            "peticion": cuerpo.peticion,
+            "proveedor": proveedor.nombre,
+            "modelo": proveedor.modelo,
+            "cantidad": len(variantes),
+        }
+    ).execute()
 
     filas = []
     for datos in variantes:
