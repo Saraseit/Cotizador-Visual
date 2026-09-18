@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Propuesta {{ referencia_externa }}</title>
+  <style>
+    /* Plantilla base neutra. La identidad de marca se aplica después. */
+    @page {
+      size: Letter;
+      margin: 18mm 16mm 20mm 16mm;
+      @bottom-left {
+        content: "Propuesta {{ referencia_externa }}";
+        font-family: "IBM Plex Sans", "DejaVu Sans", sans-serif;
+        font-size: 8.5pt;
+        color: #57534A;
+      }
+      @bottom-right {
+        content: "Página " counter(page) " de " counter(pages);
+        font-family: "IBM Plex Sans", "DejaVu Sans", sans-serif;
+        font-size: 8.5pt;
+        color: #57534A;
+      }
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      font-family: "IBM Plex Sans", "DejaVu Sans", sans-serif;
+      font-size: 10pt;
+      color: #1A1916;
+      margin: 0;
+    }
+
+    .encabezado {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      border-bottom: 1.5pt solid #1A1916;
+      padding-bottom: 8pt;
+      margin-bottom: 14pt;
+    }
+    .encabezado h1 {
+      font-size: 18pt;
+      font-weight: 600;
+      margin: 0 0 2pt 0;
+      letter-spacing: -0.2pt;
+    }
+    .encabezado .sub { color: #57534A; font-size: 9.5pt; }
+    .meta { text-align: right; font-size: 9.5pt; line-height: 1.5; }
+    .meta strong { display: inline-block; min-width: 62pt; color: #57534A; font-weight: 500; }
+
+    table.items { width: 100%; border-collapse: collapse; }
+    table.items thead { display: table-header-group; }
+    table.items th {
+      text-align: left;
+      font-size: 8.5pt;
+      text-transform: uppercase;
+      letter-spacing: 0.4pt;
+      color: #57534A;
+      font-weight: 600;
+      padding: 6pt 6pt;
+      border-bottom: 1pt solid #DDD8CE;
+    }
+    table.items td {
+      padding: 8pt 6pt;
+      border-bottom: 0.5pt solid #DDD8CE;
+      vertical-align: top;
+    }
+    table.items tr { page-break-inside: avoid; }
+    .col-imagen { width: 96pt; }
+    .col-cantidad, .col-precio, .col-importe { text-align: right; white-space: nowrap; }
+    th.col-cantidad, th.col-precio, th.col-importe { text-align: right; }
+
+    .miniatura {
+      position: relative;
+      width: 84pt;
+      height: 84pt;
+      border: 0.5pt solid #DDD8CE;
+      border-radius: 4pt;
+      overflow: hidden;
+      background: #FFFFFF;
+    }
+    .miniatura img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+    .miniatura.vacia {
+      background: #E9E6DF;
+      color: #57534A;
+      font-size: 8pt;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+    .etiqueta-conceptual {
+      position: absolute;
+      top: 4pt;
+      left: 4pt;
+      background: #F3E5DE;
+      color: #7A3D22;
+      font-size: 6.5pt;
+      font-weight: 600;
+      letter-spacing: 0.3pt;
+      text-transform: uppercase;
+      padding: 2pt 4pt;
+      border-radius: 2pt;
+    }
+
+    .descripcion { font-weight: 500; }
+    .codigo { color: #57534A; font-size: 8.5pt; margin-top: 2pt; }
+    .nota-item { color: #7A3D22; font-size: 8pt; margin-top: 3pt; }
+
+    table.totales { width: 100%; margin-top: 10pt; border-collapse: collapse; page-break-inside: avoid; }
+    table.totales td { padding: 6pt; }
+    table.totales .etiqueta { text-align: right; color: #57534A; }
+    table.totales .valor { text-align: right; font-size: 13pt; font-weight: 600; width: 120pt; border-top: 1.5pt solid #1A1916; }
+
+    .leyenda {
+      margin-top: 18pt;
+      padding: 8pt 10pt;
+      border-left: 2pt solid #7A3D22;
+      background: #F3E5DE;
+      color: #7A3D22;
+      font-size: 8.5pt;
+      line-height: 1.45;
+      page-break-inside: avoid;
+    }
+    .pie {
+      margin-top: 14pt;
+      color: #57534A;
+      font-size: 8.5pt;
+      line-height: 1.45;
+    }
+  </style>
+</head>
+<body>
+  <header class="encabezado">
+    <div>
+      <h1>Propuesta de mobiliario</h1>
+      <div class="sub">Minimal 4.0 · Diseño, construcción y eventos</div>
+    </div>
+    <div class="meta">
+      <div><strong>Cliente</strong> {{ nombre_cliente }}</div>
+      <div><strong>Referencia</strong> {{ referencia_externa or "—" }}</div>
+      <div><strong>Fecha</strong> {{ fecha }}</div>
+    </div>
+  </header>
+
+  <table class="items">
+    <thead>
+      <tr>
+        <th class="col-imagen">Imagen</th>
+        <th>Descripción</th>
+        <th class="col-cantidad">Cant.</th>
+        <th class="col-precio">P. unitario</th>
+        <th class="col-importe">Importe</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr>
+        <td class="col-imagen">
+          {% if item.imagen_data_uri %}
+          <div class="miniatura">
+            {% if item.es_render_conceptual %}<span class="etiqueta-conceptual">Render conceptual</span>{% endif %}
+            <img src="{{ item.imagen_data_uri }}" alt="">
+          </div>
+          {% else %}
+          <div class="miniatura vacia">Sin imagen</div>
+          {% endif %}
+        </td>
+        <td>
+          <div class="descripcion">{{ item.descripcion }}</div>
+          {% if item.codigo %}<div class="codigo">Código {{ item.codigo }}</div>{% endif %}
+          {% if item.es_render_conceptual %}<div class="nota-item">Imagen de referencia de acabado, sujeta a confirmación de producción.</div>{% endif %}
+        </td>
+        <td class="col-cantidad">{{ item.cantidad }}</td>
+        <td class="col-precio">{{ item.precio_unitario }}</td>
+        <td class="col-importe">{{ item.importe }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <table class="totales">
+    <tr>
+      <td class="etiqueta">Total ({{ total_items }} {{ "partida" if total_items == 1 else "partidas" }})</td>
+      <td class="valor">{{ total }}</td>
+    </tr>
+  </table>
+
+  {% if hay_render_conceptual %}
+  <div class="leyenda">
+    <strong>Sobre los renders conceptuales.</strong> Las imágenes marcadas como "Render conceptual" son
+    una referencia visual del acabado solicitado, generada a partir de la fotografía de la pieza
+    original. El color, la textura y el resultado final están sujetos a confirmación de producción.
+  </div>
+  {% endif %}
+
+  <div class="pie">
+    Precios en pesos mexicanos. Esta propuesta es informativa y no sustituye la cotización formal
+    emitida por el sistema de la empresa.
+  </div>
+</body>
+</html>
