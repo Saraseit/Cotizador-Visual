@@ -31,6 +31,29 @@ def construir_prompt(prompt_estilo: str, peticion: str) -> str:
     return f"{prompt_estilo.strip()}\n\nCambio solicitado por el cliente: {peticion.strip()}"
 
 
+LADO_MAXIMO_BASE = 1024
+
+
+def preparar_imagen_base(datos: bytes) -> bytes:
+    """Normaliza la imagen base para el proveedor: PNG RGBA con lado mayor ≤ 1024 px.
+
+    Así da igual que en la biblioteca esté como JPG o WebP, y no se mandan fotos enormes.
+    """
+    from PIL import Image, UnidentifiedImageError
+
+    try:
+        imagen = Image.open(BytesIO(datos))
+        imagen.load()
+    except (UnidentifiedImageError, OSError, ValueError) as error:
+        raise ErrorProveedorImagenes(f"La imagen base no es válida: {error}") from error
+
+    imagen = imagen.convert("RGBA")
+    imagen.thumbnail((LADO_MAXIMO_BASE, LADO_MAXIMO_BASE))
+    buffer = BytesIO()
+    imagen.save(buffer, format="PNG", optimize=True)
+    return buffer.getvalue()
+
+
 class ProveedorOpenAI:
     nombre = "openai"
 
@@ -45,10 +68,11 @@ class ProveedorOpenAI:
     async def generar_variantes(self, imagen_base: bytes, peticion: str, cantidad: int) -> list[bytes]:
         from openai import OpenAIError
 
+        base_png = preparar_imagen_base(imagen_base)
         try:
             respuesta = await self._cliente.images.edit(
                 model=self.modelo,
-                image=("base.png", imagen_base, "image/png"),
+                image=("base.png", base_png, "image/png"),
                 prompt=construir_prompt(self._prompt_estilo, peticion),
                 n=cantidad,
                 size="1024x1024",
@@ -83,10 +107,7 @@ class ProveedorSimulado:
     async def generar_variantes(self, imagen_base: bytes, peticion: str, cantidad: int) -> list[bytes]:
         from PIL import Image, ImageDraw, ImageFont
 
-        try:
-            base = Image.open(BytesIO(imagen_base)).convert("RGBA")
-        except Exception as error:
-            raise ErrorProveedorImagenes(f"La imagen base no es válida: {error}") from error
+        base = Image.open(BytesIO(preparar_imagen_base(imagen_base))).convert("RGBA")
 
         salidas: list[bytes] = []
         for indice in range(cantidad):
