@@ -1,8 +1,10 @@
 import { Sparkles } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 
-import { ErrorApi } from '@/api/cliente'
-import { useGenerarImagenes } from '@/api/consultas'
+import { useQueryClient } from '@tanstack/react-query'
+
+import { ErrorApi, api } from '@/api/cliente'
+import { llaves, useGenerarImagenes } from '@/api/consultas'
 import type { Imagen } from '@/api/tipos'
 import { Aviso, mensajeDeError } from '@/componentes/Aviso'
 import { Boton } from '@/componentes/Boton'
@@ -37,7 +39,19 @@ interface Props {
 
 export function PanelGenerar({ imagenBase, itemId, cotizacionId = null, etiquetaBase, alElegir, ocupado = false, sinBase }: Props) {
   const generar = useGenerarImagenes()
+  const clienteConsultas = useQueryClient()
   const [peticion, setPeticion] = useState('')
+
+  /** Al elegir una opción, las otras de la misma tanda se borran en segundo plano (sin bloquear la UI). */
+  const elegirYLimpiar = (imagenId: string) => {
+    const descartadas = (generar.data?.imagenes ?? []).filter((i) => i.id !== imagenId)
+    alElegir?.(imagenId)
+    if (descartadas.length === 0) return
+    void Promise.allSettled(descartadas.map((i) => api.imagenes.eliminar(i.id))).then(() => {
+      if (itemId) void clienteConsultas.invalidateQueries({ queryKey: llaves.imagenesDeItem(itemId) })
+      void clienteConsultas.invalidateQueries({ queryKey: llaves.resumenBiblioteca })
+    })
+  }
 
   if (!imagenBase) {
     return (
@@ -120,7 +134,7 @@ export function PanelGenerar({ imagenBase, itemId, cotizacionId = null, etiqueta
                     key={imagen.id}
                     type="button"
                     disabled={ocupado}
-                    onClick={() => alElegir(imagen.id)}
+                    onClick={() => elegirYLimpiar(imagen.id)}
                     className="group flex flex-col gap-1.5 rounded-tarjeta border border-borde p-2 text-left hover:border-acento"
                   >
                     <Miniatura url={imagen.url} tamano="lg" conceptual className="h-auto w-full aspect-square" />

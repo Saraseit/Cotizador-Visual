@@ -108,6 +108,7 @@ export const api = {
     },
     generar: (cuerpo: { imagen_base_id: string; peticion: string; item_id?: string | null; cotizacion_id?: string | null }) =>
       peticion<ResultadoGeneracion>('/imagenes/generar', json(cuerpo)),
+    eliminar: (id: string) => peticion<void>(`/imagenes/${id}`, { method: 'DELETE' }),
   },
   biblioteca: {
     resumen: () => peticion<ResumenBiblioteca>('/biblioteca/resumen'),

@@ -81,6 +81,14 @@ class Storage:
                 status.HTTP_502_BAD_GATEWAY, f"No se pudo leer '{ruta}' de Storage: {error}"
             ) from error
 
+    async def eliminar(self, bucket: str, ruta: str) -> None:
+        try:
+            await self._cliente.storage.from_(bucket).remove([ruta])
+        except Exception as error:
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY, f"No se pudo borrar '{ruta}' de Storage: {error}"
+            ) from error
+
     async def url_firmada(self, bucket: str, ruta: str, segundos: int | None = None) -> str:
         respuesta = await self._cliente.storage.from_(bucket).create_signed_url(
             ruta, segundos or self._config.url_firmada_segundos

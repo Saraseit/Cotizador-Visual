@@ -189,3 +189,26 @@ async def generar_imagenes(
         )
     creadas = await db.table("imagenes").insert(filas).execute()
     return ResultadoGeneracion(imagenes=await con_urls(storage, creadas.data or []))
+
+
+@router.delete("/{imagen_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def eliminar_imagen(imagen_id: UUID, usuario: Usuario, db: ClienteDB, storage: StorageDep) -> None:
+    """Borra una imagen generada que nadie usa (las 3 opciones descartadas de cada tanda).
+
+    Sólo imágenes `generada`, sin asignar a ningún ítem de cotización, subidas por el mismo usuario
+    o por un admin. Se borra el objeto de Storage y después la fila.
+    """
+    respuesta = await db.table("imagenes").select("*").eq("id", str(imagen_id)).limit(1).execute()
+    if not respuesta.data:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "La imagen no existe.")
+    imagen = respuesta.data[0]
+    if imagen.get("tipo") != "generada":
+        raise HTTPException(status.HTTP_409_CONFLICT, "Sólo se pueden borrar imágenes generadas con IA.")
+    if str(imagen.get("subida_por")) != str(usuario.id) and not usuario.es_admin:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Sólo quien generó la imagen (o un admin) puede borrarla.")
+    en_uso = await db.table("cotizacion_items").select("id").eq("imagen_id", str(imagen_id)).limit(1).execute()
+    if en_uso.data:
+        raise HTTPException(status.HTTP_409_CONFLICT, "La imagen está asignada a un ítem de cotización; no se puede borrar.")
+
+    await storage.eliminar(storage.bucket_imagenes, imagen["ruta_storage"])
+    await db.table("imagenes").delete().eq("id", str(imagen_id)).execute()
