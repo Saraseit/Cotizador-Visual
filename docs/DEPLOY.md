@@ -6,10 +6,25 @@ El README trae la versión corta ("Deploy en 5 pasos"). Aquí está todo lo dem�
 
 | Archivo | Para qué |
 |---|---|
-| `railway.toml` (raíz) | Railway construye con `backend/Dockerfile` usando el repo completo como contexto. No hay que cambiar el *Root Directory* del servicio. El healthcheck apunta a `/api/salud`. |
-| `backend/Dockerfile` | Imagen Python 3.12 con Pango, Cairo, HarfBuzz y fuentes para WeasyPrint. Escucha en `$PORT`. |
-| `vercel.json` (raíz) | Vercel instala y construye `frontend/` (`cd frontend && npm ci` / `npm run build`, salida `frontend/dist`) y reescribe todas las rutas a `index.html` para React Router. No hay que cambiar el *Root Directory* del proyecto. |
-| `.github/workflows/ci.yml` | En cada push y PR corre `pytest` (con las librerías de WeasyPrint) y el build del frontend. No despliega. |
+| `backend/Dockerfile` | Imagen Python 3.12 con Pango, Cairo, HarfBuzz, DejaVu e IBM Plex Sans (copiada desde `backend/app/fuentes`, licencia OFL) para WeasyPrint. El contexto de build es la raíz del repo. Escucha en `$PORT`. |
+| `frontend/vercel.json` | Rewrite de todas las rutas a `index.html` para React Router. Vercel detecta Vite solo cuando el Root Directory es `frontend`. |
+| `.github/workflows/ci.yml` | En cada push y PR corre `pytest` (con las librerías de WeasyPrint), el build del frontend y el build de la imagen Docker con una prueba de render de PDF. No despliega. |
+
+### Por qué no hay `railway.toml` ni `vercel.json` en la raíz
+
+- Railway deprecó *Config as Code* (`railway.json` / `railway.toml`): según su documentación, los archivos existentes sólo siguen funcionando en servicios antiguos hasta el 1 de diciembre de 2026, y un servicio nuevo los ignora (arranca con el builder Railpack). Su reemplazo, *Infrastructure as Code* (`.railway/railway.ts`), no se lee en el deploy: sólo se aplica con `railway config apply` desde la CLI, así que no ahorra el paso manual. Por eso el builder, la ruta del Dockerfile, el healthcheck y la política de reinicio se fijan una vez en el panel del servicio.
+- Vercel sólo acepta el *Root Directory* como ajuste del proyecto, no desde archivo. Con Root Directory = `frontend` lee `frontend/vercel.json` y detecta Vite. Un `vercel.json` en la raíz con `cd frontend && npm ci` falla en cuanto el Root Directory es `frontend` (el comando corre ya dentro de esa carpeta).
+
+### Configuración del servicio en Railway (panel)
+
+| Campo | Valor |
+|---|---|
+| Settings → Build → Builder | `Dockerfile` |
+| Settings → Build → Dockerfile Path | `backend/Dockerfile` |
+| Settings → Build → Root Directory | vacío (raíz del repo) |
+| Settings → Deploy → Healthcheck Path | `/api/salud` |
+| Settings → Deploy → Restart Policy | `On failure` |
+| Settings → Networking | *Generate Domain* |
 | `INDISPENSABLE.env.example` | Las únicas variables sin valor por defecto. |
 | `backend/scripts/arrancar.py` | Todo lo que se hace una sola vez después del primer deploy. |
 
@@ -83,6 +98,8 @@ curl http://localhost:8000/api/salud
 
 ## Ajustes manuales que no se pudieron eliminar
 
+- **Builder, ruta del Dockerfile, healthcheck y política de reinicio en Railway**: Config as Code está deprecado y su reemplazo requiere la CLI (ver arriba). Son cuatro campos del panel, una sola vez.
+- **Root Directory = `frontend` en Vercel**: no se acepta desde archivo.
 - **Generar el dominio público en Railway** (Settings → Networking → Generate Domain): Railway no lo crea solo y `VITE_API_URL` depende de él.
 - **Protección de contraseñas filtradas en Supabase Auth**: es un interruptor del dashboard; el linter lo marca como WARN mientras esté apagado.
 - **`SUPABASE_DB_URL` para que `arrancar.py` aplique migraciones**: Supabase no expone la contraseña de la base por API; si no la pegas, las migraciones se aplican desde el SQL Editor (o con `supabase db push`).

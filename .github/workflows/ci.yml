@@ -45,3 +45,14 @@ jobs:
           VITE_SUPABASE_URL: https://ejemplo.supabase.co
           VITE_SUPABASE_ANON_KEY: ejemplo
           VITE_API_URL: https://ejemplo.up.railway.app
+
+  imagen:
+    name: Backend (imagen Docker)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Construir la imagen igual que Railway
+        run: docker build -f backend/Dockerfile -t cotizador-backend .
+      - name: Arranca y renderiza un PDF (sin Supabase)
+        run: |
+          docker run --rm cotizador-backend python -c "from app.servicios.render_pdf import html_a_pdf; pdf = html_a_pdf('<p style=\"font-family: IBM Plex Sans\">Prueba</p>'); assert pdf.startswith(b'%PDF-'); print('PDF OK', len(pdf), 'bytes')"

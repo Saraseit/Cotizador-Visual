@@ -6,8 +6,8 @@ Herramienta interna de **Minimal 4.0** (Mérida, Yucatán) para convertir el exp
 
 Sólo necesitas los valores de `INDISPENSABLE.env.example`. Todo lo demás tiene valor por defecto.
 
-1. **Backend en Railway.** Entra a <https://railway.com/new>, elige *Deploy from GitHub repo* y selecciona `Saraseit/Cotizador-Visual`. Railway lee `railway.toml` de la raíz y construye con `backend/Dockerfile`; no cambies el Root Directory.
-2. **Variables del backend.** En el servicio recién creado abre la pestaña *Variables* → *Raw Editor* y pega (rellenando los valores):
+1. **Backend en Railway.** Entra a <https://railway.com/new>, elige *Deploy from GitHub repo* y selecciona `Saraseit/Cotizador-Visual`. En el servicio, *Settings → Build*: Builder **Dockerfile**, Dockerfile Path **`backend/Dockerfile`** (Root Directory se queda en la raíz). En *Settings → Deploy*: Healthcheck Path **`/api/salud`**, Restart Policy *On failure*. Estos cuatro campos son el único ajuste manual: Railway ya no lee `railway.toml` en servicios nuevos (ver [docs/DEPLOY.md](docs/DEPLOY.md)).
+2. **Variables del backend.** En el mismo servicio abre la pestaña *Variables* → *Raw Editor* y pega (rellenando los valores):
 
    ```
    SUPABASE_URL=                 # Supabase → Project Settings → API → Project URL
@@ -16,7 +16,7 @@ Sólo necesitas los valores de `INDISPENSABLE.env.example`. Todo lo demás tiene
    ```
 
    Luego *Settings → Networking → Generate Domain* y copia la URL (la usarás en el paso 4). Espera a que el deploy quede en verde: el healthcheck es `/api/salud`.
-3. **Frontend en Vercel.** Entra a <https://vercel.com/new>, importa el mismo repo y déjalo con el Root Directory en la raíz: `vercel.json` ya construye `frontend/`.
+3. **Frontend en Vercel.** Entra a <https://vercel.com/new>, importa el mismo repo y en *Root Directory* pulsa *Edit* y elige **`frontend`**. Vercel detecta Vite solo; `frontend/vercel.json` trae el rewrite para React Router. Ese Root Directory es el único ajuste manual (Vercel no lo acepta desde archivo).
 4. **Variables del frontend.** En la misma pantalla de importación (o después en *Settings → Environment Variables*) pega:
 
    ```
@@ -35,7 +35,7 @@ Sólo necesitas los valores de `INDISPENSABLE.env.example`. Todo lo demás tiene
 
    Te pide lo que falte, aplica migraciones pendientes, crea el primer admin, siembra el catálogo de ejemplo si quieres, llama a `/api/salud` del backend desplegado y te deja un resumen. Después entra al frontend con ese admin y abre **Estado**.
 
-Detalles, todas las variables, cómo actualizar y los tres ajustes manuales que no se pudieron eliminar: [docs/DEPLOY.md](docs/DEPLOY.md).
+Detalles, todas las variables, cómo actualizar y los ajustes manuales que no se pudieron eliminar: [docs/DEPLOY.md](docs/DEPLOY.md).
 
 ## Qué hace
 
@@ -53,14 +53,13 @@ cotizador-visual/
 ├── README.md
 ├── INDISPENSABLE.env.example     # las 6 variables sin valor por defecto
 ├── .env.example                  # todas las variables, con comentario
-├── railway.toml                  # build del backend desde la raíz
-├── vercel.json                   # build del frontend desde la raíz
-├── .github/workflows/ci.yml      # pytest + build en cada push
+├── .github/workflows/ci.yml      # pytest, build del frontend e imagen Docker en cada push
 ├── docs/DEPLOY.md
 ├── backend/                      # FastAPI + supabase-py + WeasyPrint
-│   ├── Dockerfile
+│   ├── Dockerfile                # contexto: raíz del repo
 │   ├── pyproject.toml
 │   ├── app/
+│   │   ├── fuentes/              # IBM Plex Sans (OFL) para el PDF
 │   │   ├── main.py               # app, CORS, routers
 │   │   ├── config.py             # settings con valores por defecto sanos
 │   │   ├── auth.py               # validación del JWT de Supabase + perfil
@@ -82,6 +81,7 @@ cotizador-visual/
 │   │   └── mapeo_columnas.json   # mapeo configurable del export
 │   └── tests/
 ├── frontend/                     # React 18 + Vite + TypeScript + Tailwind
+│   ├── vercel.json               # rewrite para React Router (Root Directory = frontend)
 │   └── src/
 │       ├── rutas/                # entrar, subir, revisar, generar, catalogo, biblioteca, usuarios, estado
 │       ├── componentes/
@@ -207,7 +207,8 @@ Prefijo `/api`. Todos requieren `Authorization: Bearer <token de Supabase>` salv
 - **CORS por defecto acepta `*.vercel.app` en desarrollo** para que el primer deploy no requiera configurar dominios; producción lo exige explícito.
 - **`/api/salud` devuelve 503 sólo si Supabase falla**: el resto en rojo devuelve 200 con detalle, para que el servicio arranque y se pueda diagnosticar.
 - **Migración extra `0007_migraciones_aplicadas`** (no estaba en la lista de la sesión 2): una función que lee `schema_migrations` para que `arrancar.py` sepa qué falta sin necesitar la contraseña de la base. Aplicarlas desde el script sí necesita `SUPABASE_DB_URL` (psycopg); sin ella indica cómo hacerlo a mano.
-- **Configuración de Railway y Vercel en la raíz** (`railway.toml` con `dockerfilePath`, `vercel.json` con comandos que entran a `frontend/`), para no cambiar el Root Directory en ninguno.
+- **Sin archivos de configuración de Railway ni Vercel en la raíz.** Railway deprecó Config as Code (`railway.toml` no se lee en servicios nuevos) y su Infrastructure as Code sólo se aplica con la CLI; Vercel no acepta el Root Directory desde archivo. Los cuatro campos del servicio en Railway y el Root Directory en Vercel se configuran en el panel una vez, y están en "Deploy en 5 pasos".
+- **IBM Plex Sans empaquetada en el repo** (`app/fuentes`, licencia OFL) y copiada a la imagen: el paquete `fonts-ibm-plex` de Debian está en `contrib`, que la imagen slim no habilita.
 - **Codificación UTF-8 con finales de línea LF** (`.gitattributes`).
 
 ## Pendientes conocidos
