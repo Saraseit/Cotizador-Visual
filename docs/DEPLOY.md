@@ -2,6 +2,16 @@
 
 El README trae la versión corta ("Deploy en 5 pasos"). Aquí está todo lo demás: qué hace cada archivo, todas las variables, qué revisar después y cómo actualizar.
 
+## Despliegue actual (18 de septiembre de 2026)
+
+| Pieza | Dónde | URL |
+|---|---|---|
+| Backend | Railway, proyecto `provista`, servicio `provista-api` | <https://provista-api-production.up.railway.app> (`/api/salud` para el diagnóstico) |
+| Frontend | Vercel, equipo `saraseits`, proyecto `cotizador-visual` (Root Directory `frontend`) | <https://cotizador-minimal40.vercel.app> (alias: frontend-flame-zeta-99.vercel.app) |
+| Base, Auth y Storage | Supabase, proyecto `cotizador-visual` (ref `rwtlgueqvncrnucyfymq`) | <https://rwtlgueqvncrnucyfymq.supabase.co> |
+
+Ambos despliegan solos con cada push a `main`. El backend corre con `ENTORNO=desarrollo`, así que acepta cualquier dominio `*.vercel.app`; al pasar a producción hay que fijar `ENTORNO=produccion` y `CORS_ORIGENES` con el dominio del frontend.
+
 ## Qué automatiza el repo
 
 | Archivo | Para qué |
