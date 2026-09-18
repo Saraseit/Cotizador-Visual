@@ -1,26 +1,17 @@
-import { Check, Sparkles, Upload } from 'lucide-react'
+import { Check, Upload } from 'lucide-react'
 import { useMemo, useRef, useState } from 'react'
 
-import { useAsignarImagen, useGenerarImagenes, useImagenesDeItem, useSubirImagen } from '@/api/consultas'
+import { useAsignarImagen, useImagenesDeItem, useSubirImagen } from '@/api/consultas'
 import type { CotizacionItem, Imagen } from '@/api/tipos'
 import { Aviso, mensajeDeError } from '@/componentes/Aviso'
 import { Boton } from '@/componentes/Boton'
+import { Chip } from '@/componentes/Campo'
 import { Miniatura } from '@/componentes/Miniatura'
 import { Modal } from '@/componentes/Modal'
+import { PanelGenerar } from '@/componentes/PanelGenerar'
 import { PildoraTipoImagen } from '@/componentes/Pildora'
 
 type Pestana = 'biblioteca' | 'generar'
-
-const ATAJOS_ACABADOS = [
-  'Madera nogal',
-  'Madera encino claro',
-  'Blanco mate',
-  'Negro mate',
-  'Dorado cepillado',
-  'Ratán natural',
-  'Terciopelo verde',
-  'Lino crudo',
-]
 
 interface Props {
   item: CotizacionItem
@@ -33,35 +24,34 @@ export function SelectorImagen({ item, cotizacionId, alCerrar }: Props) {
   const [pestana, setPestana] = useState<Pestana>('biblioteca')
   const asignar = useAsignarImagen(cotizacionId)
 
-  const elegir = (imagenId: string | null) => {
-    asignar.mutate({ itemId: item.id, imagenId }, { onSuccess: alCerrar })
+  /** Asigna la imagen al ítem. Por defecto cierra la ventana; con `cerrar=false` se queda abierta. */
+  const elegir = (imagenId: string | null, cerrar = true) => {
+    asignar.mutate({ itemId: item.id, imagenId }, { onSuccess: () => cerrar && alCerrar() })
   }
 
   return (
     <Modal abierto titulo="Elegir imagen" subtitulo={`${item.codigo_origen || 'Sin código'} · ${item.descripcion_origen}`} alCerrar={alCerrar}>
-      {!esAdHoc && (
-        <div className="mb-5 flex gap-1 border-b border-borde" role="tablist">
-          {(
-            [
-              ['biblioteca', 'Biblioteca'],
-              ['generar', 'Generar imagen'],
-            ] as const
-          ).map(([valor, texto]) => (
-            <button
-              key={valor}
-              type="button"
-              role="tab"
-              aria-selected={pestana === valor}
-              onClick={() => setPestana(valor)}
-              className={`-mb-px min-h-boton border-b-2 px-4 text-sm font-medium ${
-                pestana === valor ? 'border-acento text-texto' : 'border-transparent text-texto-secundario hover:text-texto'
-              }`}
-            >
-              {texto}
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="mb-5 flex gap-1 border-b border-borde" role="tablist">
+        {(
+          [
+            ['biblioteca', esAdHoc ? 'Subir foto' : 'Biblioteca'],
+            ['generar', 'Generar imagen con IA'],
+          ] as const
+        ).map(([valor, texto]) => (
+          <button
+            key={valor}
+            type="button"
+            role="tab"
+            aria-selected={pestana === valor}
+            onClick={() => setPestana(valor)}
+            className={`-mb-px min-h-boton border-b-2 px-4 text-sm font-medium ${
+              pestana === valor ? 'border-acento text-texto' : 'border-transparent text-texto-secundario hover:text-texto'
+            }`}
+          >
+            {texto}
+          </button>
+        ))}
+      </div>
 
       {asignar.isError && (
         <Aviso tono="error" className="mb-4">
@@ -69,17 +59,17 @@ export function SelectorImagen({ item, cotizacionId, alCerrar }: Props) {
         </Aviso>
       )}
 
-      {pestana === 'biblioteca' || esAdHoc ? (
+      {pestana === 'biblioteca' ? (
         <PestanaBiblioteca item={item} esAdHoc={esAdHoc} alElegir={elegir} ocupado={asignar.isPending} />
       ) : (
-        <PestanaGenerar item={item} alElegir={elegir} ocupado={asignar.isPending} />
+        <PestanaGenerar item={item} esAdHoc={esAdHoc} alElegir={elegir} ocupado={asignar.isPending} />
       )}
     </Modal>
   )
 }
 
 // ---------------------------------------------------------------------------
-// Pestaña Biblioteca
+// Subir
 // ---------------------------------------------------------------------------
 
 function BotonSubir({ item, alSubida, etiqueta = 'Subir imagen nueva' }: { item: CotizacionItem; alSubida: (imagen: Imagen) => void; etiqueta?: string }) {
@@ -112,6 +102,10 @@ function BotonSubir({ item, alSubida, etiqueta = 'Subir imagen nueva' }: { item:
   )
 }
 
+// ---------------------------------------------------------------------------
+// Pestaña Biblioteca
+// ---------------------------------------------------------------------------
+
 function PestanaBiblioteca({
   item,
   esAdHoc,
@@ -141,12 +135,12 @@ function PestanaBiblioteca({
     return (
       <div className="flex flex-col gap-4">
         <Aviso tono="info">
-          Este ítem no está en el catálogo, así que no tiene biblioteca ni imagen base para generar. Sube una foto para
-          usarla en esta propuesta.
+          Este ítem no está en el catálogo, así que no tiene biblioteca. Sube una foto para usarla en esta propuesta; después
+          puedes generar variantes con IA a partir de ella en la otra pestaña.
         </Aviso>
         {item.imagen && (
           <div className="flex items-center gap-4">
-            <Miniatura url={item.imagen.url} tamano="md" />
+            <Miniatura url={item.imagen.url} tamano="md" conceptual={item.es_render_conceptual} />
             <p className="text-sm text-texto-secundario">Imagen actual</p>
           </div>
         )}
@@ -166,13 +160,13 @@ function PestanaBiblioteca({
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-2">
-          <ChipFiltro activo={etiqueta === null} onClick={() => setEtiqueta(null)}>
+          <Chip activo={etiqueta === null} onClick={() => setEtiqueta(null)}>
             Todas
-          </ChipFiltro>
+          </Chip>
           {etiquetas.map((e) => (
-            <ChipFiltro key={e} activo={etiqueta === e} onClick={() => setEtiqueta(e)}>
+            <Chip key={e} activo={etiqueta === e} onClick={() => setEtiqueta(e)}>
               {e}
-            </ChipFiltro>
+            </Chip>
           ))}
         </div>
         <BotonSubir item={item} alSubida={(imagen) => alElegir(imagen.id)} />
@@ -225,123 +219,56 @@ function PestanaBiblioteca({
   )
 }
 
-function ChipFiltro({ activo, onClick, children }: { activo: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-pildora border px-3 py-1 text-xs font-medium ${
-        activo ? 'border-texto bg-texto text-superficie' : 'border-borde text-texto-secundario hover:text-texto'
-      }`}
-    >
-      {children}
-    </button>
-  )
-}
-
 // ---------------------------------------------------------------------------
-// Pestaña Generar imagen
+// Pestaña Generar
 // ---------------------------------------------------------------------------
 
-function PestanaGenerar({ item, alElegir, ocupado }: { item: CotizacionItem; alElegir: (imagenId: string) => void; ocupado: boolean }) {
-  const imagenes = useImagenesDeItem(item.item_id)
-  const generar = useGenerarImagenes()
-  const [peticion, setPeticion] = useState('')
+function PestanaGenerar({
+  item,
+  esAdHoc,
+  alElegir,
+  ocupado,
+}: {
+  item: CotizacionItem
+  esAdHoc: boolean
+  alElegir: (imagenId: string | null, cerrar?: boolean) => void
+  ocupado: boolean
+}) {
+  const imagenes = useImagenesDeItem(esAdHoc ? null : item.item_id)
 
-  const base = useMemo(() => {
+  // Base: la oficial del catálogo; si no hay, una variante; si no, la imagen ya asignada al ítem.
+  const base = useMemo<Imagen | null>(() => {
     const lista = imagenes.data ?? []
-    return lista.find((i) => i.tipo === 'oficial') ?? lista.find((i) => i.tipo === 'variante') ?? null
-  }, [imagenes.data])
-
-  const agregarAtajo = (texto: string) => {
-    setPeticion((actual) => (actual.trim() ? `${actual.trim()}, ${texto.toLowerCase()}` : texto))
-  }
-
-  const lanzar = () => {
-    if (!base || !item.item_id) return
-    generar.mutate({ item_id: item.item_id, imagen_base_id: base.id, peticion: peticion.trim() })
-  }
-
-  if (imagenes.isLoading) return <p className="text-sm text-texto-secundario">Cargando imagen base…</p>
-  if (!base) {
     return (
-      <Aviso tono="ambar">
-        Este ítem no tiene imagen oficial en la biblioteca, así que no hay base para generar. Sube una en la pestaña
-        Biblioteca y vuelve aquí.
-      </Aviso>
+      lista.find((i) => i.tipo === 'oficial') ??
+      lista.find((i) => i.tipo === 'variante') ??
+      (item.imagen && item.imagen.tipo !== 'generada' ? item.imagen : null) ??
+      item.imagen ??
+      null
     )
-  }
+  }, [imagenes.data, item.imagen])
 
-  const resultados = generar.data?.imagenes ?? []
+  if (!esAdHoc && imagenes.isLoading) return <p className="text-sm text-texto-secundario">Cargando imagen base…</p>
 
   return (
-    <div className="grid gap-6 md:grid-cols-[200px_1fr]">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-texto-secundario">Imagen base</p>
-        <Miniatura url={base.url} tamano="lg" className="mt-2 h-auto w-full aspect-square" />
-        <p className="mt-2 text-xs text-texto-secundario">Foto {base.tipo} del ítem {item.item?.codigo ?? item.codigo_origen}.</p>
-      </div>
-
-      <div className="flex flex-col gap-4">
-        <label className="flex flex-col gap-1.5 text-sm font-medium">
-          Qué pidió el cliente
-          <textarea
-            rows={3}
-            value={peticion}
-            maxLength={600}
-            placeholder="Ej. la misma silla pero en madera de nogal con asiento de lino crudo"
-            onChange={(evento) => setPeticion(evento.target.value)}
-          />
-        </label>
-
-        <div>
-          <p className="mb-2 text-xs text-texto-secundario">Acabados frecuentes</p>
-          <div className="flex flex-wrap gap-2">
-            {ATAJOS_ACABADOS.map((atajo) => (
-              <ChipFiltro key={atajo} activo={false} onClick={() => agregarAtajo(atajo)}>
-                {atajo}
-              </ChipFiltro>
-            ))}
+    <PanelGenerar
+      imagenBase={base}
+      itemId={item.item_id}
+      etiquetaBase={base ? `Base: ${base.tipo} de ${item.item?.codigo ?? (item.codigo_origen || 'este ítem')}` : undefined}
+      alElegir={(imagenId) => alElegir(imagenId)}
+      ocupado={ocupado}
+      sinBase={
+        <div className="flex flex-col gap-4">
+          <Aviso tono="ambar">
+            {esAdHoc
+              ? 'Este ítem no tiene foto todavía. Sube una y se usará como base para generar las variantes.'
+              : 'Este ítem no tiene imagen en la biblioteca. Sube una foto (queda como variante) y se usará como base.'}
+          </Aviso>
+          <div>
+            <BotonSubir item={item} alSubida={(imagen) => alElegir(imagen.id, false)} etiqueta="Subir foto base" />
           </div>
         </div>
-
-        <Aviso tono="info">
-          El ángulo (tres cuartos), el fondo neutro y la iluminación los fija el sistema. Describe sólo el acabado, material
-          o color; la forma de la pieza se conserva.
-        </Aviso>
-
-        <div>
-          <Boton icono={<Sparkles className="h-4 w-4" />} cargando={generar.isPending} disabled={peticion.trim().length < 3} onClick={lanzar}>
-            Generar 4 opciones
-          </Boton>
-          {generar.isPending && <p className="mt-2 text-xs text-texto-secundario">Esto tarda entre 30 y 90 segundos.</p>}
-        </div>
-
-        {generar.isError && <Aviso tono="error">{mensajeDeError(generar.error)}</Aviso>}
-
-        {resultados.length > 0 && (
-          <div className="flex flex-col gap-3">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {resultados.map((imagen, indice) => (
-                <button
-                  key={imagen.id}
-                  type="button"
-                  disabled={ocupado}
-                  onClick={() => alElegir(imagen.id)}
-                  className="group flex flex-col gap-1.5 rounded-tarjeta border border-borde p-2 text-left hover:border-acento"
-                >
-                  <Miniatura url={imagen.url} tamano="lg" conceptual className="h-auto w-full aspect-square" />
-                  <span className="text-xs font-medium text-texto-secundario group-hover:text-texto">Usar opción {indice + 1}</span>
-                </button>
-              ))}
-            </div>
-            <Aviso tono="ambar">
-              Estas imágenes son una referencia del acabado, sujeta a confirmación de producción. En el PDF llevan la
-              etiqueta "Render conceptual" y una leyenda al pie.
-            </Aviso>
-          </div>
-        )}
-      </div>
-    </div>
+      }
+    />
   )
 }

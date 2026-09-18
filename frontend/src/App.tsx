@@ -4,10 +4,12 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { Disposicion } from '@/componentes/Disposicion'
 import { ProveedorSesion, RutaProtegida } from '@/lib/sesion'
 import { Biblioteca } from '@/rutas/biblioteca/Biblioteca'
+import { Catalogo } from '@/rutas/catalogo/Catalogo'
 import { Entrar } from '@/rutas/entrar/Entrar'
 import { Generar } from '@/rutas/generar/Generar'
 import { Revisar } from '@/rutas/revisar/Revisar'
 import { Subir } from '@/rutas/subir/Subir'
+import { Usuarios } from '@/rutas/usuarios/Usuarios'
 
 const clienteConsultas = new QueryClient({
   defaultOptions: {
@@ -32,7 +34,9 @@ export function App() {
               <Route path="/" element={<Subir />} />
               <Route path="/cotizaciones/:id" element={<Revisar />} />
               <Route path="/cotizaciones/:id/generar" element={<Generar />} />
+              <Route path="/catalogo" element={<Catalogo />} />
               <Route path="/biblioteca" element={<Biblioteca />} />
+              <Route path="/usuarios" element={<Usuarios />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

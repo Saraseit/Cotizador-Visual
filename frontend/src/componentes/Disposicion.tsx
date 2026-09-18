@@ -1,6 +1,8 @@
-import { Check, Library, LogOut } from 'lucide-react'
+import { Check, Library, LogOut, Package, Users } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 
+import { usePerfil } from '@/api/consultas'
 import { useSesion } from '@/lib/sesion'
 
 const PASOS = ['Subir', 'Revisar', 'Generar'] as const
@@ -14,7 +16,7 @@ function pasoActual(ruta: string): number {
 
 function IndicadorProgreso({ actual }: { actual: number }) {
   return (
-    <ol className="hidden items-center gap-1 md:flex" aria-label="Progreso">
+    <ol className="hidden items-center gap-1 lg:flex" aria-label="Progreso">
       {PASOS.map((nombre, indice) => {
         const numero = indice + 1
         const completado = numero < actual
@@ -28,11 +30,7 @@ function IndicadorProgreso({ actual }: { actual: number }) {
             >
               <span
                 className={`flex h-5 w-5 items-center justify-center rounded-full border text-[11px] font-semibold ${
-                  activo
-                    ? 'border-superficie/40'
-                    : completado
-                      ? 'border-resuelto-texto bg-resuelto-fondo'
-                      : 'border-borde'
+                  activo ? 'border-superficie/40' : completado ? 'border-resuelto-texto bg-resuelto-fondo' : 'border-borde'
                 }`}
               >
                 {completado ? <Check className="h-3 w-3" /> : numero}
@@ -47,8 +45,25 @@ function IndicadorProgreso({ actual }: { actual: number }) {
   )
 }
 
+function Enlace({ a, icono, children }: { a: string; icono: ReactNode; children: ReactNode }) {
+  return (
+    <NavLink
+      to={a}
+      className={({ isActive }) =>
+        `flex min-h-boton items-center gap-2 rounded-boton px-3 text-sm ${
+          isActive ? 'bg-fondo text-texto' : 'text-texto-secundario hover:bg-fondo hover:text-texto'
+        }`
+      }
+    >
+      {icono}
+      <span className="hidden sm:inline">{children}</span>
+    </NavLink>
+  )
+}
+
 export function Disposicion() {
   const { sesion, salir } = useSesion()
+  const perfil = usePerfil()
   const ubicacion = useLocation()
 
   return (
@@ -60,19 +75,22 @@ export function Disposicion() {
           </Link>
           <IndicadorProgreso actual={pasoActual(ubicacion.pathname)} />
           <nav className="flex items-center gap-1">
-            <NavLink
-              to="/biblioteca"
-              className={({ isActive }) =>
-                `flex min-h-boton items-center gap-2 rounded-boton px-3 text-sm ${
-                  isActive ? 'bg-fondo text-texto' : 'text-texto-secundario hover:bg-fondo hover:text-texto'
-                }`
-              }
+            <Enlace a="/catalogo" icono={<Package className="h-4 w-4" />}>
+              Catálogo
+            </Enlace>
+            <Enlace a="/biblioteca" icono={<Library className="h-4 w-4" />}>
+              Biblioteca
+            </Enlace>
+            {perfil.data?.rol === 'admin' && (
+              <Enlace a="/usuarios" icono={<Users className="h-4 w-4" />}>
+                Usuarios
+              </Enlace>
+            )}
+            <span
+              className="hidden max-w-[180px] truncate px-2 text-sm text-texto-secundario xl:inline"
+              title={sesion?.user.email ?? ''}
             >
-              <Library className="h-4 w-4" />
-              <span className="hidden sm:inline">Biblioteca</span>
-            </NavLink>
-            <span className="hidden max-w-[180px] truncate px-2 text-sm text-texto-secundario lg:inline" title={sesion?.user.email ?? ''}>
-              {sesion?.user.email}
+              {perfil.data?.nombre || sesion?.user.email}
             </span>
             <button
               type="button"

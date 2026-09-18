@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import obtener_configuracion
 from app.db.cliente import crear_cliente
-from app.routers import biblioteca, catalogo, cotizaciones, imagenes, salud
+from app.routers import biblioteca, catalogo, cotizaciones, imagenes, perfil, salud, usuarios
 
 
 @asynccontextmanager
@@ -32,7 +32,15 @@ def crear_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    for router in (salud.router, cotizaciones.router, catalogo.router, imagenes.router, biblioteca.router):
+    for router in (
+        salud.router,
+        perfil.router,
+        cotizaciones.router,
+        catalogo.router,
+        imagenes.router,
+        biblioteca.router,
+        usuarios.router,
+    ):
         app.include_router(router, prefix="/api")
     return app
 

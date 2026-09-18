@@ -4,7 +4,7 @@ Uso:
   python scripts/cargar_catalogo.py --csv fixtures/catalogo_ejemplo.csv --imagenes fixtures/imagenes_ejemplo
   python scripts/cargar_catalogo.py --csv fixtures/catalogo_ejemplo.csv --imagenes fixtures/imagenes_ejemplo --crear-placeholders
 
-CSV con columnas: codigo,nombre,categoria.
+CSV con columnas: codigo,nombre,categoria (opcionales: descripcion,medidas,etiquetas separadas por |,costo_reposicion).
 Carpeta de imágenes con archivos <codigo>.jpg|png|webp (oficial) y <codigo>-1.jpg, <codigo>-2.jpg (variantes).
 
 Idempotente: los ítems se hacen upsert por código y las imágenes se identifican por su ruta en
@@ -69,12 +69,24 @@ def leer_csv(ruta: Path) -> list[dict[str, str]]:
             codigo = normalizar_codigo(fila.get("codigo"))
             if not codigo:
                 continue
-            items[codigo] = {
+            item = {
                 "codigo": codigo,
                 "nombre": (fila.get("nombre") or "").strip() or codigo,
                 "categoria": (fila.get("categoria") or "").strip(),
                 "activo": True,
             }
+            # Columnas opcionales: descripcion, medidas, etiquetas (separadas por |), costo_reposicion.
+            for opcional in ("descripcion", "medidas"):
+                if fila.get(opcional):
+                    item[opcional] = fila[opcional].strip()
+            if fila.get("etiquetas"):
+                item["etiquetas"] = sorted({e.strip().lower() for e in fila["etiquetas"].split("|") if e.strip()})
+            if fila.get("costo_reposicion"):
+                try:
+                    item["costo_reposicion"] = float(fila["costo_reposicion"].replace("$", "").replace(",", ""))
+                except ValueError:
+                    print(f"Aviso: costo_reposicion inválido en {codigo}: {fila['costo_reposicion']!r}")
+            items[codigo] = item
     return list(items.values())
 
 

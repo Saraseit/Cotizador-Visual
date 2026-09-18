@@ -6,13 +6,38 @@ export type TipoItem = 'catalogo' | 'ad_hoc'
 export type EstadoCotizacion = 'revision' | 'generada'
 export type EstadoItem = 'falta_imagen' | 'sugerida' | 'variante' | 'render_conceptual'
 
-export interface CatalogoItem {
+// --- Perfil y usuarios ------------------------------------------------------
+
+export interface PerfilYo {
   id: string
-  codigo: string
   nombre: string
-  categoria: string
-  activo: boolean
+  rol: Rol
+  email: string | null
 }
+
+export interface UsuarioAdmin {
+  id: string
+  email: string | null
+  nombre: string
+  rol: Rol
+  creado_en: string | null
+  ultimo_acceso: string | null
+}
+
+export interface UsuarioEntrada {
+  email: string
+  contrasena: string
+  nombre: string
+  rol: Rol
+}
+
+export interface UsuarioActualizacion {
+  nombre?: string
+  rol?: Rol
+  contrasena?: string
+}
+
+// --- Imágenes ---------------------------------------------------------------
 
 export interface Imagen {
   id: string
@@ -26,6 +51,64 @@ export interface Imagen {
   creado_en: string | null
   url: string | null
 }
+
+export interface ResultadoGeneracion {
+  imagenes: Imagen[]
+}
+
+// --- Catálogo ---------------------------------------------------------------
+
+export interface ListaPrecios {
+  id: string
+  nombre: string
+  orden: number
+  activo: boolean
+}
+
+export interface PrecioItem {
+  lista_id: string
+  precio: number
+  nombre_lista: string | null
+}
+
+export interface CatalogoItem {
+  id: string
+  codigo: string
+  nombre: string
+  categoria: string
+  activo: boolean
+  descripcion: string
+  medidas: string
+  etiquetas: string[]
+  costo_reposicion: number | null
+  precios: PrecioItem[]
+  imagen_oficial: Imagen | null
+  total_imagenes: number
+}
+
+export interface CatalogoItemEntrada {
+  codigo: string
+  nombre: string
+  categoria: string
+  descripcion: string
+  medidas: string
+  etiquetas: string[]
+  costo_reposicion: number | null
+  activo: boolean
+  // lista_id -> precio
+  precios: Record<string, number>
+}
+
+export type CatalogoItemActualizacion = Partial<CatalogoItemEntrada>
+
+export interface ResultadoCargaTexto {
+  creados: number
+  actualizados: number
+  errores: string[]
+  items: CatalogoItem[]
+}
+
+// --- Cotizaciones -----------------------------------------------------------
 
 export interface CotizacionItem {
   id: string
@@ -68,9 +151,7 @@ export interface ResultadoPdf {
   ruta_storage: string
 }
 
-export interface ResultadoGeneracion {
-  imagenes: Imagen[]
-}
+// --- Biblioteca -------------------------------------------------------------
 
 export interface ItemSinImagen {
   id: string

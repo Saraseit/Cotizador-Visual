@@ -26,11 +26,13 @@ cotizador-visual/
 │   │   ├── config.py             # settings desde variables de entorno
 │   │   ├── auth.py               # validación del JWT de Supabase + perfil
 │   │   ├── db/                   # cliente de Supabase y esquemas Pydantic
-│   │   ├── routers/              # salud, cotizaciones, catalogo, imagenes, biblioteca
-│   │   ├── servicios/            # parser_export, matching, render_pdf, proveedor_imagenes, storage
+│   │   ├── routers/              # salud, perfil, cotizaciones, catalogo, imagenes, biblioteca, usuarios
+│   │   ├── servicios/            # parser_export, matching, catalogo_texto, render_pdf, proveedor_imagenes, storage
 │   │   └── plantillas/propuesta_base.html
 │   ├── scripts/
 │   │   ├── cargar_catalogo.py    # seeding idempotente de catálogo e imágenes
+│   │   ├── crear_usuario.py      # alta de usuarios desde la terminal
+│   │   ├── prueba_punta_a_punta.py  # prueba de humo contra la API real
 │   │   ├── generar_placeholders.py
 │   │   └── generar_export_ejemplo.py
 │   ├── fixtures/
@@ -41,11 +43,11 @@ cotizador-visual/
 ├── frontend/                     # React 18 + Vite + TypeScript + Tailwind
 │   ├── vercel.json               # rewrite para React Router
 │   └── src/
-│       ├── rutas/                # entrar, subir, revisar, generar, biblioteca
+│       ├── rutas/                # entrar, subir, revisar, generar, catalogo, biblioteca, usuarios
 │       ├── componentes/
 │       ├── api/                  # cliente HTTP tipado + hooks de TanStack Query
 │       └── lib/                  # supabase, sesión, formato
-└── supabase/migrations/          # esquema, RLS y buckets
+└── supabase/migrations/          # esquema, RLS, buckets, endurecimiento, catálogo extendido
 ```
 
 ## Requisitos
@@ -60,7 +62,7 @@ cotizador-visual/
 
 ### 1. Supabase
 
-Proyecto actual: **cotizador-visual** (ref `rwtlgueqvncrnucyfymq`, región us-east-1, organización "Saraseit's Org"). Las tres migraciones ya están aplicadas y firma tokens con ES256, así que `SUPABASE_JWT_SECRET` no hace falta.
+Proyecto actual: **cotizador-visual** (ref `rwtlgueqvncrnucyfymq`, región us-east-1, organización "Saraseit's Org"). Las cuatro migraciones ya están aplicadas y firma tokens con ES256, así que `SUPABASE_JWT_SECRET` no hace falta.
 
 1. Copia de *Project Settings → API*: la URL, la **anon/publishable key** y la **service role key**.
 2. Aplica las migraciones de `supabase/migrations/` en orden. Dos opciones:
@@ -141,6 +143,15 @@ python scripts/cargar_catalogo.py --csv fixtures/catalogo_ejemplo.csv --imagenes
 
 Con datos reales: exporta el catálogo a un CSV con esas tres columnas, nombra las fotos con el código y corre el mismo comando sin `--crear-placeholders`.
 
+## Pantallas
+
+- **Subir** (`/`): arrastrar el export; lista de propuestas recientes.
+- **Revisar** (`/cotizaciones/:id`): tabla con pendientes arriba; "Elegir imagen" abre dos pestañas para cualquier ítem: *Biblioteca* (o *Subir foto* en ítems fuera de catálogo) y *Generar imagen con IA*. La base para generar es la foto oficial; si el ítem no tiene ninguna, la pestaña ofrece subir una y la usa.
+- **Generar** (`/cotizaciones/:id/generar`): descarga del PDF; tarjeta "Diseño con IA" en Fase 2.
+- **Catálogo** (`/catalogo`): buscador y tabla con foto, medidas, etiquetas, un precio por lista y costo de reposición. "Nuevo ítem" abre el formulario completo; al guardar aparece la sección de imágenes (subir oficial o variante, generar con IA). "Carga por texto" acepta líneas `código; nombre; categoría; descripción; medidas; costo; etiqueta|etiqueta` pegadas desde Excel. "Listas de precios" crea, renombra o desactiva listas.
+- **Biblioteca** (`/biblioteca`): métricas e ítems más cotizados sin foto.
+- **Usuarios** (`/usuarios`, sólo admin): alta con correo y contraseña, nombre, rol, cambio de contraseña y baja.
+
 ## Cómo funciona
 
 - **Parser** (`servicios/parser_export.py`): lee `fixtures/mapeo_columnas.json` para saber en qué hoja, fila y columnas están los datos y de qué celdas salen cliente y referencia. Los encabezados se comparan sin acentos ni mayúsculas. Para PDF usa `pdfplumber` con la misma interfaz; el punto de ajuste con el archivo real es `_extraer_tablas_pdf`.
@@ -206,11 +217,20 @@ Prefijo `/api`. Todos requieren `Authorization: Bearer <token de Supabase>` salv
 | GET | `/cotizaciones/{id}` | Detalle con ítems, imagen (URL firmada) y estado |
 | PATCH | `/cotizaciones/{id}/items/{item_id}` | `{imagen_id}` asigna o quita (`null`) la imagen |
 | POST | `/cotizaciones/{id}/generar` | Renderiza el PDF, lo guarda en `exports` y devuelve URL firmada |
-| GET | `/catalogo/items?buscar=` | Búsqueda por código o nombre |
+| GET | `/perfil/yo` | Perfil del usuario autenticado (nombre, rol, correo) |
+| GET | `/catalogo/items?buscar=` | Búsqueda por código, nombre o categoría, con precios e imagen oficial |
+| POST | `/catalogo/items` | Alta por formulario: código, nombre, categoría, descripción, medidas, etiquetas, costo de reposición, precios por lista |
+| PATCH | `/catalogo/items/{id}` | Edición parcial (mismos campos; `precios` reemplaza el conjunto) |
+| POST | `/catalogo/items/carga-texto` | Alta rápida: `{texto}` con una línea por ítem; upsert por código |
+| GET | `/catalogo/items/{id}` | Detalle de un ítem |
 | GET | `/catalogo/items/{id}/imagenes` | Imágenes del ítem: oficial primero, luego por usos |
+| GET/POST | `/catalogo/listas-precios` | Listas de precios (Público, Distribuidor, …) |
+| PATCH | `/catalogo/listas-precios/{id}` | Renombrar, ordenar o desactivar una lista |
 | POST | `/imagenes` | multipart `archivo` (+ `item_id`, `etiquetas`, `tipo`) |
-| POST | `/imagenes/generar` | `{item_id, imagen_base_id, peticion}` → 4 imágenes `generada` |
+| POST | `/imagenes/generar` | `{imagen_base_id, peticion, item_id?}` → 4 imágenes `generada` (sin `item_id` para ítems ad hoc) |
 | GET | `/biblioteca/resumen` | Métricas de la biblioteca |
+| GET/POST | `/usuarios` | Sólo admin: lista y alta de usuarios (correo, contraseña, nombre, rol) |
+| PATCH/DELETE | `/usuarios/{id}` | Sólo admin: nombre, rol, contraseña; baja. No permite borrarse ni degradarse a sí mismo |
 
 ## Decisiones tomadas
 
@@ -228,6 +248,9 @@ Cosas que no estaban definidas y se resolvieron sobre la marcha:
 - **Las miniaturas del PDF se incrustan como data URI** reducidas a 640 px, para que WeasyPrint no dependa de la red y el archivo no pese demasiado.
 - **`gpt-image-1` con `quality=medium` e `input_fidelity=high`** por defecto; la calidad se cambia por variable de entorno.
 - **Sin registro de usuarios ni recuperación de contraseña** en la app; se gestiona desde Supabase.
+- **Listas de precios como tabla propia** (`listas_precios` + `precios_items`) en vez de un JSON en el ítem, para poder renombrarlas y consultarlas. Los precios del catálogo son de referencia: en la cotización manda el precio que trae el export.
+- **La carga por texto nunca borra datos**: un campo vacío en la línea conserva lo que el ítem ya tenía; sólo se sobrescribe lo que viene con valor.
+- **Generar con IA sin ítem de catálogo**: para ítems ad hoc la base es la foto que se subió; las imágenes generadas quedan sin `item_id` y sólo se usan en esa cotización.
 - **Validación del JWT tolerante al reloj**: `leeway=60` y sin verificar `iat` (la expiración sí se verifica), porque un desfase de pocos segundos entre la máquina y Supabase rechazaba tokens recién emitidos.
 - **Usuario de prueba del piloto**: `piloto@minimal40.local` con rol admin, creado con `scripts/crear_usuario.py`; cámbiale la contraseña o bórralo antes de usar datos reales.
 - **Codificación de commits y archivos en UTF-8 con finales de línea LF** (`.gitattributes`), para que el Dockerfile y los scripts funcionen igual en Windows y Linux.

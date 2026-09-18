@@ -2,12 +2,20 @@ import { supabase } from '@/lib/supabase'
 
 import type {
   CatalogoItem,
+  CatalogoItemActualizacion,
+  CatalogoItemEntrada,
   CotizacionDetalle,
   CotizacionResumen,
   Imagen,
+  ListaPrecios,
+  PerfilYo,
+  ResultadoCargaTexto,
   ResultadoGeneracion,
   ResultadoPdf,
   ResumenBiblioteca,
+  UsuarioActualizacion,
+  UsuarioAdmin,
+  UsuarioEntrada,
 } from './tipos'
 
 const BASE = ((import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:8000').replace(/\/$/, '')
@@ -53,10 +61,16 @@ async function peticion<T>(ruta: string, opciones: RequestInit = {}): Promise<T>
     }
     throw new ErrorApi(respuesta.status, detalle)
   }
+  if (respuesta.status === 204) return undefined as T
   return (await respuesta.json()) as T
 }
 
+const json = (cuerpo: unknown, method = 'POST'): RequestInit => ({ method, body: JSON.stringify(cuerpo) })
+
 export const api = {
+  perfil: {
+    yo: () => peticion<PerfilYo>('/perfil/yo'),
+  },
   cotizaciones: {
     listar: () => peticion<CotizacionResumen[]>('/cotizaciones'),
     obtener: (id: string) => peticion<CotizacionDetalle>(`/cotizaciones/${id}`),
@@ -66,15 +80,22 @@ export const api = {
       return peticion<CotizacionDetalle>('/cotizaciones', { method: 'POST', body: datos })
     },
     asignarImagen: (cotizacionId: string, itemId: string, imagenId: string | null) =>
-      peticion<CotizacionDetalle>(`/cotizaciones/${cotizacionId}/items/${itemId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ imagen_id: imagenId }),
-      }),
+      peticion<CotizacionDetalle>(`/cotizaciones/${cotizacionId}/items/${itemId}`, json({ imagen_id: imagenId }, 'PATCH')),
     generar: (id: string) => peticion<ResultadoPdf>(`/cotizaciones/${id}/generar`, { method: 'POST' }),
   },
   catalogo: {
-    buscar: (termino: string) => peticion<CatalogoItem[]>(`/catalogo/items?buscar=${encodeURIComponent(termino)}`),
+    buscar: (termino: string, soloActivos = false) =>
+      peticion<CatalogoItem[]>(`/catalogo/items?buscar=${encodeURIComponent(termino)}&solo_activos=${soloActivos}`),
+    obtener: (id: string) => peticion<CatalogoItem>(`/catalogo/items/${id}`),
+    crear: (entrada: CatalogoItemEntrada) => peticion<CatalogoItem>('/catalogo/items', json(entrada)),
+    actualizar: (id: string, cambios: CatalogoItemActualizacion) =>
+      peticion<CatalogoItem>(`/catalogo/items/${id}`, json(cambios, 'PATCH')),
+    cargarTexto: (texto: string) => peticion<ResultadoCargaTexto>('/catalogo/items/carga-texto', json({ texto })),
     imagenesDeItem: (itemId: string) => peticion<Imagen[]>(`/catalogo/items/${itemId}/imagenes`),
+    listasPrecios: () => peticion<ListaPrecios[]>('/catalogo/listas-precios'),
+    crearListaPrecios: (nombre: string) => peticion<ListaPrecios>('/catalogo/listas-precios', json({ nombre })),
+    actualizarListaPrecios: (id: string, cambios: { nombre?: string; orden?: number; activo?: boolean }) =>
+      peticion<ListaPrecios>(`/catalogo/listas-precios/${id}`, json(cambios, 'PATCH')),
   },
   imagenes: {
     subir: (parametros: { archivo: File; itemId?: string | null; etiquetas?: string[]; tipo?: 'oficial' | 'variante' }) => {
@@ -85,10 +106,16 @@ export const api = {
       if (parametros.tipo) datos.append('tipo', parametros.tipo)
       return peticion<Imagen>('/imagenes', { method: 'POST', body: datos })
     },
-    generar: (cuerpo: { item_id: string; imagen_base_id: string; peticion: string }) =>
-      peticion<ResultadoGeneracion>('/imagenes/generar', { method: 'POST', body: JSON.stringify(cuerpo) }),
+    generar: (cuerpo: { imagen_base_id: string; peticion: string; item_id?: string | null }) =>
+      peticion<ResultadoGeneracion>('/imagenes/generar', json(cuerpo)),
   },
   biblioteca: {
     resumen: () => peticion<ResumenBiblioteca>('/biblioteca/resumen'),
+  },
+  usuarios: {
+    listar: () => peticion<UsuarioAdmin[]>('/usuarios'),
+    crear: (entrada: UsuarioEntrada) => peticion<UsuarioAdmin>('/usuarios', json(entrada)),
+    actualizar: (id: string, cambios: UsuarioActualizacion) => peticion<UsuarioAdmin>(`/usuarios/${id}`, json(cambios, 'PATCH')),
+    eliminar: (id: string) => peticion<void>(`/usuarios/${id}`, { method: 'DELETE' }),
   },
 }

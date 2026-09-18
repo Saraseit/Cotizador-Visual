@@ -91,14 +91,15 @@ async def subir_imagen(
 async def generar_imagenes(
     cuerpo: PeticionGenerarImagen, usuario: Usuario, db: ClienteDB, storage: StorageDep, config: Config
 ) -> ResultadoGeneracion:
-    """Genera variantes con el proveedor de imágenes a partir de una imagen base del ítem."""
+    """Genera variantes a partir de una imagen base. Sin item_id (ítems ad hoc) quedan como imágenes sueltas."""
     base = await db.table("imagenes").select("*").eq("id", str(cuerpo.imagen_base_id)).limit(1).execute()
     if not base.data:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "La imagen base no existe.")
     imagen_base = base.data[0]
-    if str(imagen_base.get("item_id")) != str(cuerpo.item_id):
+    item_id = cuerpo.item_id or (UUID(imagen_base["item_id"]) if imagen_base.get("item_id") else None)
+    if cuerpo.item_id and imagen_base.get("item_id") and str(imagen_base["item_id"]) != str(cuerpo.item_id):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "La imagen base no pertenece al ítem indicado.")
-    codigo = await _codigo_del_item(db, cuerpo.item_id)
+    codigo = await _codigo_del_item(db, item_id)
 
     try:
         proveedor = obtener_proveedor(config)
@@ -117,7 +118,7 @@ async def generar_imagenes(
         await storage.subir(storage.bucket_imagenes, ruta, datos, "image/png")
         filas.append(
             {
-                "item_id": str(cuerpo.item_id),
+                "item_id": str(item_id) if item_id else None,
                 "ruta_storage": ruta,
                 "tipo": "generada",
                 "etiquetas": ["render conceptual"],

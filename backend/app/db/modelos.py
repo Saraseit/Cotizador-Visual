@@ -17,19 +17,47 @@ EstadoCotizacion = Literal["revision", "generada"]
 EstadoItem = Literal["falta_imagen", "sugerida", "variante", "render_conceptual"]
 
 
+# ---------------------------------------------------------------------------
+# Perfiles y usuarios
+# ---------------------------------------------------------------------------
+
 class Perfil(BaseModel):
     id: UUID
     nombre: str = ""
     rol: Rol = "vendedor"
 
 
-class CatalogoItem(BaseModel):
-    id: UUID
-    codigo: str
-    nombre: str
-    categoria: str = ""
-    activo: bool = True
+class PerfilYo(Perfil):
+    email: str | None = None
 
+
+class UsuarioAdmin(BaseModel):
+    """Vista de administración: combina Supabase Auth con la tabla perfiles."""
+
+    id: UUID
+    email: str | None = None
+    nombre: str = ""
+    rol: Rol = "vendedor"
+    creado_en: datetime | None = None
+    ultimo_acceso: datetime | None = None
+
+
+class UsuarioEntrada(BaseModel):
+    email: str = Field(min_length=5, max_length=120)
+    contrasena: str = Field(min_length=8, max_length=72)
+    nombre: str = Field(default="", max_length=80)
+    rol: Rol = "vendedor"
+
+
+class UsuarioActualizacion(BaseModel):
+    nombre: str | None = Field(default=None, max_length=80)
+    rol: Rol | None = None
+    contrasena: str | None = Field(default=None, min_length=8, max_length=72)
+
+
+# ---------------------------------------------------------------------------
+# Imágenes
+# ---------------------------------------------------------------------------
 
 class Imagen(BaseModel):
     id: UUID
@@ -44,6 +72,99 @@ class Imagen(BaseModel):
     # URL firmada de corta duración, calculada por el backend.
     url: str | None = None
 
+
+class PeticionGenerarImagen(BaseModel):
+    """`item_id` es opcional: para ítems ad hoc se genera a partir de cualquier imagen base."""
+
+    imagen_base_id: UUID
+    peticion: str = Field(min_length=3, max_length=600)
+    item_id: UUID | None = None
+
+
+class ResultadoGeneracion(BaseModel):
+    imagenes: list[Imagen]
+
+
+# ---------------------------------------------------------------------------
+# Catálogo y listas de precios
+# ---------------------------------------------------------------------------
+
+class ListaPrecios(BaseModel):
+    id: UUID
+    nombre: str
+    orden: int = 0
+    activo: bool = True
+
+
+class ListaPreciosEntrada(BaseModel):
+    nombre: str = Field(min_length=1, max_length=60)
+    orden: int | None = None
+    activo: bool | None = None
+
+
+class PrecioItem(BaseModel):
+    lista_id: UUID
+    precio: float = 0
+    nombre_lista: str | None = None
+
+
+class CatalogoItem(BaseModel):
+    id: UUID
+    codigo: str
+    nombre: str
+    categoria: str = ""
+    activo: bool = True
+    descripcion: str = ""
+    medidas: str = ""
+    etiquetas: list[str] = Field(default_factory=list)
+    costo_reposicion: float | None = None
+    # Calculados
+    precios: list[PrecioItem] = Field(default_factory=list)
+    imagen_oficial: Imagen | None = None
+    total_imagenes: int = 0
+
+
+class CatalogoItemEntrada(BaseModel):
+    codigo: str = Field(min_length=1, max_length=40)
+    nombre: str = Field(min_length=1, max_length=160)
+    categoria: str = Field(default="", max_length=80)
+    descripcion: str = Field(default="", max_length=2000)
+    medidas: str = Field(default="", max_length=200)
+    etiquetas: list[str] = Field(default_factory=list)
+    costo_reposicion: float | None = Field(default=None, ge=0)
+    activo: bool = True
+    # lista_id -> precio. Las listas que no aparezcan quedan sin precio.
+    precios: dict[UUID, float] = Field(default_factory=dict)
+
+
+class CatalogoItemActualizacion(BaseModel):
+    codigo: str | None = Field(default=None, min_length=1, max_length=40)
+    nombre: str | None = Field(default=None, min_length=1, max_length=160)
+    categoria: str | None = Field(default=None, max_length=80)
+    descripcion: str | None = Field(default=None, max_length=2000)
+    medidas: str | None = Field(default=None, max_length=200)
+    etiquetas: list[str] | None = None
+    costo_reposicion: float | None = Field(default=None, ge=0)
+    activo: bool | None = None
+    precios: dict[UUID, float] | None = None
+
+
+class CargaTexto(BaseModel):
+    """Alta rápida: una línea por ítem `codigo; nombre; categoria; descripcion; medidas; costo; etiqueta|etiqueta`."""
+
+    texto: str = Field(min_length=1, max_length=200_000)
+
+
+class ResultadoCargaTexto(BaseModel):
+    creados: int = 0
+    actualizados: int = 0
+    errores: list[str] = Field(default_factory=list)
+    items: list[CatalogoItem] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Cotizaciones
+# ---------------------------------------------------------------------------
 
 class CotizacionItem(BaseModel):
     id: UUID
@@ -88,20 +209,14 @@ class AsignarImagen(BaseModel):
     imagen_id: UUID | None = None
 
 
-class PeticionGenerarImagen(BaseModel):
-    item_id: UUID
-    imagen_base_id: UUID
-    peticion: str = Field(min_length=3, max_length=600)
-
-
-class ResultadoGeneracion(BaseModel):
-    imagenes: list[Imagen]
-
-
 class ResultadoPdf(BaseModel):
     url: str
     ruta_storage: str
 
+
+# ---------------------------------------------------------------------------
+# Biblioteca
+# ---------------------------------------------------------------------------
 
 class ItemSinImagen(BaseModel):
     id: UUID
