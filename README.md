@@ -53,7 +53,7 @@ cotizador-visual/
 - Python 3.12+ (el Dockerfile usa 3.12; en local funciona con 3.13).
 - Node 20+ y npm.
 - Un proyecto de Supabase (Postgres + Auth + Storage).
-- Para generar PDFs **en local en Windows**: WeasyPrint necesita el runtime de GTK3 (Pango, Cairo). Instálalo desde <https://github.com/tschoonj/GTK-for-Windows-Runtime-Environment-Installer> o con MSYS2. Sin él, el backend arranca y todo funciona salvo `POST /cotizaciones/{id}/generar` (devuelve 500 con un mensaje claro) y dos pruebas se omiten. En Docker/Railway ya viene todo.
+- Para generar PDFs **en local en Windows**: WeasyPrint necesita el runtime de GTK3 (Pango, Cairo). Instálalo desde <https://github.com/tschoonj/GTK-for-Windows-Runtime-Environment-Installer> (silencioso: `gtk3-runtime.exe /S /D=C:\Users\<tu-usuario>\AppData\Local\GTK3-Runtime`). El backend lo detecta solo si está en esa ruta o en `C:\Program Files\GTK3-Runtime Win64`; en otra ruta define `WEASYPRINT_DLL_DIRECTORIES`. Sin GTK el backend arranca y todo funciona salvo `POST /cotizaciones/{id}/generar` (devuelve 500 con un mensaje claro) y dos pruebas se omiten. En Docker/Railway ya viene todo.
 - Opcional: una API key de OpenAI para generar imágenes. Sin ella, usa `PROVEEDOR_IMAGENES=simulado`.
 
 ## Configuración inicial
@@ -68,7 +68,14 @@ Proyecto actual: **cotizador-visual** (ref `rwtlgueqvncrnucyfymq`, región us-ea
    - Pegando cada archivo en el *SQL Editor* del dashboard.
 
    Las migraciones crean las tablas, las políticas RLS, la función `resumen_biblioteca` y los buckets privados `imagenes` y `exports`.
-3. Crea los usuarios en *Authentication → Users* (correo y contraseña). No hay registro desde la app. Al primer acceso se les crea su fila en `perfiles` con rol `vendedor`; para hacer admin a alguien, cambia `rol` a `admin` en la tabla.
+3. Crea los usuarios (no hay registro desde la app). Lo más rápido es el script, que también fija nombre y rol:
+
+   ```bash
+   cd backend
+   python scripts/crear_usuario.py --correo ana@empresa.com --contrasena "Secreta123!" --nombre "Ana" --rol vendedor
+   ```
+
+   También puedes hacerlo en *Authentication → Users*; al primer acceso se les crea su fila en `perfiles` con rol `vendedor`. Para hacer admin a alguien, cambia `rol` a `admin` en la tabla o vuelve a correr el script con `--rol admin`.
 4. Firma de tokens: en *Project Settings → JWT Keys* revisa si el proyecto usa llaves asimétricas (ES256, por defecto en proyectos nuevos) o el secret heredado (HS256). Con ES256 no hace falta nada más. Con HS256 copia el *Legacy JWT Secret* a `SUPABASE_JWT_SECRET`.
 
 ### 2. Variables de entorno
@@ -89,8 +96,10 @@ python -m venv .venv
 # Windows: .venv\Scripts\activate    macOS/Linux: source .venv/bin/activate
 pip install -e "./backend[dev]"
 cd backend
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --port 8000
 ```
+
+`--reload` funciona, pero en algunas terminales de Windows el recargador se queda colgado tras el primer cambio; si pasa, reinicia el proceso a mano.
 
 - Salud: <http://localhost:8000/api/salud>
 - Documentación interactiva: <http://localhost:8000/docs> (usa el botón *Authorize* con un `access_token` de Supabase).
@@ -111,6 +120,12 @@ pytest
 ```
 
 Cubren el parser (xlsx y pdf), el matching y el render del PDF. Las que necesitan WeasyPrint se omiten si faltan sus librerías nativas.
+
+Con el backend corriendo y el catálogo sembrado, la prueba de humo recorre el criterio de terminado completo contra la API real (sube el export, elige variante, sube fotos, genera 4 opciones, descarga el PDF a `backend/salidas/`):
+
+```bash
+python scripts/prueba_punta_a_punta.py --correo piloto@minimal40.local --contrasena "..."
+```
 
 ## Seeding del catálogo
 
@@ -213,6 +228,8 @@ Cosas que no estaban definidas y se resolvieron sobre la marcha:
 - **Las miniaturas del PDF se incrustan como data URI** reducidas a 640 px, para que WeasyPrint no dependa de la red y el archivo no pese demasiado.
 - **`gpt-image-1` con `quality=medium` e `input_fidelity=high`** por defecto; la calidad se cambia por variable de entorno.
 - **Sin registro de usuarios ni recuperación de contraseña** en la app; se gestiona desde Supabase.
+- **Validación del JWT tolerante al reloj**: `leeway=60` y sin verificar `iat` (la expiración sí se verifica), porque un desfase de pocos segundos entre la máquina y Supabase rechazaba tokens recién emitidos.
+- **Usuario de prueba del piloto**: `piloto@minimal40.local` con rol admin, creado con `scripts/crear_usuario.py`; cámbiale la contraseña o bórralo antes de usar datos reales.
 - **Codificación de commits y archivos en UTF-8 con finales de línea LF** (`.gitattributes`), para que el Dockerfile y los scripts funcionen igual en Windows y Linux.
 
 ## Pendientes conocidos
