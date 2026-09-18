@@ -60,7 +60,9 @@ cotizador-visual/
 
 ### 1. Supabase
 
-1. Crea el proyecto (o usa el que ya existe) y copia de *Project Settings → API*: la URL, la **anon/publishable key** y la **service role key**.
+Proyecto actual: **cotizador-visual** (ref `rwtlgueqvncrnucyfymq`, región us-east-1, organización "Saraseit's Org"). Las tres migraciones ya están aplicadas y firma tokens con ES256, así que `SUPABASE_JWT_SECRET` no hace falta.
+
+1. Copia de *Project Settings → API*: la URL, la **anon/publishable key** y la **service role key**.
 2. Aplica las migraciones de `supabase/migrations/` en orden. Dos opciones:
    - Con la CLI: `supabase link --project-ref <ref>` y `supabase db push`.
    - Pegando cada archivo en el *SQL Editor* del dashboard.
