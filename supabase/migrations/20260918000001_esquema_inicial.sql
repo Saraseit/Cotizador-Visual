@@ -215,6 +215,7 @@ as $$
                               end,
     'total_variantes',        (select count(*) from public.imagenes where tipo = 'variante'),
     'total_generadas',        (select count(*) from public.imagenes where tipo = 'generada'),
+    'total_sin_imagen',       (select count(*) from activos a left join con_alguna c on c.item_id = a.id where c.item_id is null),
     'items_sin_imagen',       (select coalesce(jsonb_agg(to_jsonb(s)), '[]'::jsonb) from sin_imagen s)
   );
 $$;

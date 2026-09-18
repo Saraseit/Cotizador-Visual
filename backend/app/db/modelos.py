@@ -117,6 +117,7 @@ class ResumenBiblioteca(BaseModel):
     porcentaje_con_oficial: float = 0
     total_variantes: int = 0
     total_generadas: int = 0
+    total_sin_imagen: int = 0
     items_sin_imagen: list[ItemSinImagen] = Field(default_factory=list)
 
 
