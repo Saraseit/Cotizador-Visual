@@ -13,7 +13,7 @@ from app.db.cliente import ClienteDB
 from app.db.modelos import Imagen, PeticionGenerarImagen, ResultadoGeneracion
 from app.routers.catalogo import con_urls
 from app.servicios.proveedor_imagenes import ErrorProveedorImagenes, obtener_proveedor
-from app.servicios.storage import StorageDep, extension_por_tipo
+from app.servicios.storage import StorageDep, extension_por_tipo, ruta_imagen_catalogo
 
 router = APIRouter(prefix="/imagenes", tags=["imagenes"])
 
@@ -81,10 +81,7 @@ async def _verificar_tope_generaciones(db: Any, usuario: Any, config: Configurac
 
 
 def _ruta_imagen(codigo: str | None, extension: str, subcarpeta: str = "") -> str:
-    base = f"catalogo/{codigo}" if codigo else "ad_hoc"
-    if subcarpeta:
-        base = f"{base}/{subcarpeta}"
-    return f"{base}/{uuid4().hex}{extension}"
+    return ruta_imagen_catalogo(codigo, f"{uuid4().hex}{extension}", subcarpeta)
 
 
 @router.post("", response_model=Imagen, status_code=status.HTTP_201_CREATED)

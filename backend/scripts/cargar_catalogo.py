@@ -29,6 +29,7 @@ sys.path.insert(0, str(RAIZ_BACKEND))
 from app.config import obtener_configuracion  # noqa: E402
 from app.db.cliente import crear_cliente  # noqa: E402
 from app.servicios.matching import normalizar_codigo  # noqa: E402
+from app.servicios.storage import ruta_imagen_catalogo  # noqa: E402
 
 EXTENSIONES = {".png", ".jpg", ".jpeg", ".webp"}
 PATRON_VARIANTE = re.compile(r"^(?P<codigo>.+)-(?P<variante>\d{1,2})$")
@@ -139,7 +140,7 @@ async def ejecutar(ruta_csv: Path, carpeta: Path | None) -> Reporte:
     if not archivos:
         return reporte
 
-    rutas_storage = {f"catalogo/{codigo}/{ruta.name}" for ruta, codigo, _ in archivos if codigo}
+    rutas_storage = {ruta_imagen_catalogo(codigo, ruta.name) for ruta, codigo, _ in archivos if codigo}
     registradas = await db.table("imagenes").select("ruta_storage, item_id, tipo").in_("ruta_storage", sorted(rutas_storage)).execute()
     rutas_registradas = {f["ruta_storage"] for f in registradas.data or []}
 
@@ -151,7 +152,7 @@ async def ejecutar(ruta_csv: Path, carpeta: Path | None) -> Reporte:
         if item_id is None:
             reporte.archivos_no_asociados.append(ruta.name)
             continue
-        ruta_storage = f"catalogo/{codigo}/{ruta.name}"
+        ruta_storage = ruta_imagen_catalogo(codigo, ruta.name)
         if ruta_storage in rutas_registradas:
             reporte.imagenes_existentes += 1
             continue

@@ -33,6 +33,18 @@ def nombre_seguro(nombre: str | None, por_defecto: str = "archivo") -> str:
     return base or por_defecto
 
 
+def ruta_imagen_catalogo(codigo: str | None, nombre_archivo: str, subcarpeta: str = "") -> str:
+    """Ruta única en el bucket de imágenes: catalogo/<código seguro>/[subcarpeta/]<archivo>.
+
+    La usan el endpoint de subida/generación y el script de seeding, para que el mismo código
+    produzca siempre la misma carpeta. Sin código, la imagen es ad hoc.
+    """
+    base = f"catalogo/{nombre_seguro(codigo, 'sin-codigo')}" if codigo else "ad_hoc"
+    if subcarpeta:
+        base = f"{base}/{nombre_seguro(subcarpeta)}"
+    return f"{base}/{nombre_seguro(nombre_archivo)}"
+
+
 class Storage:
     def __init__(self, cliente: AsyncClient, config: Configuracion):
         self._cliente = cliente
