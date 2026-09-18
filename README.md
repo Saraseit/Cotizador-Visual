@@ -69,6 +69,8 @@ cotizador-visual/
 │   │   └── plantillas/propuesta_base.html
 │   ├── scripts/
 │   │   ├── arrancar.py           # primer arranque en un comando
+│   │   ├── importar_inventario.py  # catálogo desde el reporte de existencias del sistema
+│   │   ├── importar_medidas.py   # medidas desde los reportes de inventario físico
 │   │   ├── cargar_catalogo.py    # seeding idempotente de catálogo e imágenes
 │   │   ├── crear_usuario.py      # alta de usuarios desde la terminal
 │   │   ├── prueba_punta_a_punta.py  # prueba de humo contra la API real
@@ -127,6 +129,24 @@ python scripts/prueba_punta_a_punta.py --correo <tu-admin> --contrasena "..."
 Instala el runtime de GTK3 desde <https://github.com/tschoonj/GTK-for-Windows-Runtime-Environment-Installer> (silencioso: `gtk3-runtime.exe /S /D=C:\Users\<tu-usuario>\AppData\Local\GTK3-Runtime`). El backend lo detecta solo en esa ruta o en `C:\Program Files\GTK3-Runtime Win64`; en otra, define `WEASYPRINT_DLL_DIRECTORIES`. Sin GTK todo funciona salvo generar el PDF, y `/api/salud` lo muestra en rojo.
 
 ## Seeding del catálogo
+
+### Desde los reportes del sistema (recomendado)
+
+El catálogo real se carga desde el reporte "EXISTENCIAS DE MATERIALES PARA ALQUILER" que exporta el sistema, y las medidas desde los reportes de inventario físico (INVENTARIO SILLAS, MESAS…). Ambos comandos muestran una vista previa y sólo escriben con `--aplicar`:
+
+```bash
+cd backend
+python scripts/importar_inventario.py ruta/inventario.pdf                                   # vista previa + salidas/inventario_vista_previa.csv
+python scripts/importar_inventario.py ruta/inventario.pdf --aplicar --lista "Precio 1" --desactivar-ejemplo
+python scripts/importar_medidas.py "ruta/INVENTARIO SILLAS.pdf" "ruta/INVENTARIO MESAS .pdf" --aplicar
+```
+
+- Código: el del inicio de la descripción (el que aparece en las cotizaciones); si no hay, el de la columna CODIGO. Las diferencias se reportan.
+- Nombre, categoría (la sección), costo de reposición (REPO) y precio (columna PRECIO, en la lista indicada). Descripción, medidas y etiquetas quedan vacías si el reporte no las trae.
+- Artículos sin código: código provisional estable `SC-xxxxxx` con la etiqueta `sin-codigo` (o `--sin-codigo omitir`). Conceptos internos (viáticos, ajuste, coordinación…) se cargan inactivos con la etiqueta `interno`.
+- Idempotente y sin borrar: un dato vacío en el reporte nunca pisa lo que ya tenga el catálogo; las medidas sólo se escriben donde el campo esté vacío.
+
+### Desde CSV
 
 Llena `backend/fixtures/catalogo_plantilla.csv` con tu catálogo real (columnas `codigo,nombre,categoria` obligatorias; `descripcion,medidas,etiquetas,costo_reposicion` opcionales, etiquetas separadas por `|`), pon las fotos en una carpeta nombradas por código (`SIL-001.jpg` la oficial, `SIL-001-1.jpg`, `SIL-001-2.jpg` variantes) y corre el comando:
 
@@ -213,11 +233,18 @@ Prefijo `/api`. Todos requieren `Authorization: Bearer <token de Supabase>` salv
 - **El PDF real del sistema no está en el repo**: es una cotización de un cliente. Las pruebas usan `fixtures/export_ejemplo.pdf`, generado por `scripts/generar_export_pdf_ejemplo.py` con el mismo formato y datos ficticios.
 - **Montos sólo con signo `$`** en el formato por renglones: sin esa regla, medidas como "1.80" o "2.44" se confundían con montos.
 - **Categoría, importe y costo de reposición** que trae el PDF se leen pero todavía no se guardan: sirven para validar la suma y quedan listos para usarse.
+- **Catálogo real cargado desde el reporte de existencias del 18/09/2026**: 792 artículos (708 con código, 84 provisionales, 8 internos inactivos), 709 con costo de reposición, 736 precios en la lista "Precio 1", 157 con medidas. El catálogo de ejemplo quedó desactivado. Los PDFs de inventario no están en el repo.
+- **La columna "PRECIO 1.00" va a la lista "Precio 1"**, no a "Público": no coincide con lo que se cotiza (la mesa 1040 está a $1,103 en el inventario y a $1,050 en la cotización 12066).
+- **REPO $0.00 y la pareja REPO/PRECIO en $1.00 se tratan como sin dato**; un PRECIO de $0.00 sí se guarda (hay artículos que van incluidos, como las fundas).
+- **Medidas con las etiquetas del reporte** ("ancho · largo · alto" en mesas; "respaldo · base respaldo · asiento" en sillas y bancos), sin reinterpretarlas.
+- **Códigos con punto y guion pegado** ("2008.5 - SILLA", "7029-TAPETE") se reconocen en inventario y cotizaciones.
 - **Codificación UTF-8 con finales de línea LF** (`.gitattributes`).
 
 ## Pendientes conocidos
 
-- Probar con más exports reales del sistema (el formato se validó con la cotización 12066).
+- Probar con más exports reales del sistema (el formato se validó con la cotización 12066: 15 de 16 partidas se reconocen en el catálogo).
+- 84 artículos del inventario no tienen código en el sistema (van con código provisional `SC-…`); en las cotizaciones salen como fuera de catálogo hasta que tengan código real.
+- Revisar medidas dudosas del reporte físico, por ejemplo la 1046 trae largo 24 cm (¿244?). Las filas 3010 y 3200 del reporte de mesas periqueras venían dañadas y se omitieron.
 - El PDF del sistema ya trae la foto de muchas partidas: se podrían extraer para poblar la biblioteca, y la "Reposición" para llenar `costo_reposicion` del catálogo.
 - Identidad de marca en `propuesta_base.html`.
 - "Diseño con IA" (Fase 2): la tarjeta existe deshabilitada.

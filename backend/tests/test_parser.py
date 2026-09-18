@@ -248,6 +248,11 @@ def test_estrategia_renglones_forzada_falla_con_pdf_de_tabla(mapeo):
         ("SIL-001 - SILLA TIFFANY", "SIL-001", "SILLA TIFFANY"),
         ("FUNDA IMPERIAL BLANCA GINEBRA", "", "FUNDA IMPERIAL BLANCA GINEBRA"),
         ("MESA BASE 2.44 X 1.22 - MAMPARA", "", "MESA BASE 2.44 X 1.22 - MAMPARA"),
+        ("2008.5 - SILLA THONET NEGRA", "2008.5", "SILLA THONET NEGRA"),
+        ("7029-TAPETE CIRCULAR MIMBRE", "7029", "TAPETE CIRCULAR MIMBRE"),
+        ("30023 -CUBIERTA REDONDA", "30023", "CUBIERTA REDONDA"),
+        ("7103B - CABALLETE BLANCO", "7103B", "CABALLETE BLANCO"),
+        ("XXX-999 - PERGOLA", "XXX-999", "PERGOLA"),
     ],
 )
 def test_codigo_dentro_del_articulo(mapeo, articulo, codigo, resto):

@@ -285,7 +285,7 @@ ESTRATEGIAS_TABLA = {"auto": ("lineas", "texto"), "lineas": ("lineas",), "texto"
 ESTRATEGIAS_PDF = ("auto", "renglones", "lineas", "texto")
 
 # Código al inicio del artículo: "1040 - MESA", "10081- MESA", "OC2050 - FUNDA", "SIL-001 - SILLA".
-REGEX_CODIGO_POR_DEFECTO = r"^\s*((?=[A-Za-z0-9-]*\d)[A-Za-z0-9][A-Za-z0-9-]*?)\s*-\s+(?=\S)"
+REGEX_CODIGO_POR_DEFECTO = r"^\s*([A-Za-z0-9.-]*\d[A-Za-z0-9.]*)\s*-\s*(?=\S)"
 # Montos con signo de pesos: "$1,050.00". Sin el signo, "1.80" o "2.44" (medidas) se confundirían con montos.
 _DINERO = re.compile(r"^\$-?[\d,]*\d(\.\d{1,2})?$")
 _CANTIDAD = re.compile(r"^\d+(\.\d+)?$")

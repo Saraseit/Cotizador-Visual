@@ -36,7 +36,7 @@
       "precio_unitario": "Precio unit.",
       "importe": "Total"
     },
-    "codigo_en_descripcion": "^\\s*((?=[A-Za-z0-9-]*\\d)[A-Za-z0-9][A-Za-z0-9-]*?)\\s*-\\s+(?=\\S)",
+    "codigo_en_descripcion": "^\\s*([A-Za-z0-9.-]*\\d[A-Za-z0-9.]*)\\s*-\\s*(?=\\S)",
     "metadatos": {
       "nombre_cliente": {
         "etiqueta": "Cliente:",
