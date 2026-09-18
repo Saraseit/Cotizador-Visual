@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import os
+import sys
 from dataclasses import dataclass
 from datetime import datetime
 from io import BytesIO
@@ -104,7 +106,24 @@ def renderizar_html(contexto: dict[str, Any]) -> str:
     return _entorno().get_template(PLANTILLA_PROPUESTA).render(**contexto)
 
 
+_DIRECTORIOS_GTK_WINDOWS = (
+    Path.home() / "AppData" / "Local" / "GTK3-Runtime" / "bin",
+    Path("C:/Program Files/GTK3-Runtime Win64/bin"),
+)
+
+
+def _preparar_gtk_en_windows() -> None:
+    """En Windows WeasyPrint necesita las DLL de GTK; si están en una ruta conocida se las indicamos."""
+    if sys.platform != "win32" or os.environ.get("WEASYPRINT_DLL_DIRECTORIES"):
+        return
+    for directorio in _DIRECTORIOS_GTK_WINDOWS:
+        if (directorio / "libgobject-2.0-0.dll").exists():
+            os.environ["WEASYPRINT_DLL_DIRECTORIES"] = str(directorio)
+            return
+
+
 def html_a_pdf(html: str) -> bytes:
+    _preparar_gtk_en_windows()
     try:
         from weasyprint import HTML
     except (ImportError, OSError) as error:

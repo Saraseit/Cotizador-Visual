@@ -40,7 +40,14 @@ def decodificar_token(token: str, config: Configuracion) -> dict[str, Any]:
     """Verifica firma, expiración y audiencia. Lanza jwt.PyJWTError si no es válido."""
     encabezado = jwt.get_unverified_header(token)
     algoritmo = encabezado.get("alg", "HS256")
-    opciones = {"algorithms": [algoritmo], "audience": "authenticated"}
+    # leeway y verify_iat=False toleran desfases de reloj entre esta máquina y Supabase;
+    # la expiración (exp) se sigue verificando.
+    opciones = {
+        "algorithms": [algoritmo],
+        "audience": "authenticated",
+        "leeway": 60,
+        "options": {"verify_iat": False},
+    }
 
     if algoritmo.startswith("HS"):
         if not config.supabase_jwt_secret:
