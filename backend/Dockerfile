@@ -1,4 +1,6 @@
-# Backend del Cotizador visual. Contexto de build: la carpeta backend/.
+# Backend del Cotizador visual.
+# Contexto de build: la RAÍZ del repo (así lo usa Railway con railway.toml en la raíz).
+# Local:  docker build -f backend/Dockerfile -t cotizador-backend .
 FROM python:3.12-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -23,10 +25,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-COPY pyproject.toml ./
-COPY app ./app
-COPY fixtures ./fixtures
-COPY scripts ./scripts
+COPY backend/pyproject.toml ./
+COPY backend/app ./app
+COPY backend/fixtures ./fixtures
+COPY backend/scripts ./scripts
 RUN pip install .
 
 EXPOSE 8000
