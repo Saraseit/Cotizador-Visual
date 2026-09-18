@@ -10,7 +10,7 @@ from app.config import obtener_configuracion
 from app.db.cliente import crear_cliente
 from app.routers import biblioteca, catalogo, cotizaciones, imagenes, perfil, salud, usuarios
 
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 registro = logging.getLogger("cotizador")
 
 

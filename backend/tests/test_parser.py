@@ -172,3 +172,85 @@ def test_pdf_estrategia_forzada_desde_el_mapeo(mapeo):
     _verificar_pdf(leer_export(pdf, "export.pdf", forzado), "texto")
     with pytest.raises(ErrorParser, match="desconocida"):
         leer_export(pdf, "export.pdf", {**mapeo, "pdf": {"estrategia": "magia"}})
+
+
+# ---------------------------------------------------------------------------
+# Formato PDF del sistema de la empresa (estrategia "renglones")
+# ---------------------------------------------------------------------------
+
+FIXTURE_PDF = RAIZ / "fixtures" / "export_ejemplo.pdf"
+
+
+@pytest.fixture(scope="module")
+def export_pdf_sistema(mapeo):
+    assert FIXTURE_PDF.exists(), "Falta fixtures/export_ejemplo.pdf; corre scripts/generar_export_pdf_ejemplo.py"
+    return leer_export(FIXTURE_PDF.read_bytes(), FIXTURE_PDF.name, mapeo)
+
+
+def test_pdf_sistema_metadatos(export_pdf_sistema):
+    assert export_pdf_sistema.nombre_cliente == "HACIENDA SAN PEDRO EVENTOS"
+    assert export_pdf_sistema.referencia_externa == "12345"
+    assert export_pdf_sistema.advertencias == ["PDF leído con la estrategia 'renglones'."]
+
+
+def test_pdf_sistema_partidas_codigos_y_secciones(export_pdf_sistema):
+    from scripts.generar_export_pdf_ejemplo import SECCIONES
+
+    esperadas = [(seccion, articulo) for seccion, partidas in SECCIONES for _, articulo, _, _ in partidas]
+    assert len(export_pdf_sistema.filas) == len(esperadas) == 12
+    codigos = [f.codigo for f in export_pdf_sistema.filas]
+    assert codigos[:3] == ["SIL-001", "SIL-004", "MES-002"]
+    assert "XXX-999" in codigos and "" in codigos  # inexistente y sin código se conservan
+    assert [f.categoria for f in export_pdf_sistema.filas][:3] == ["SILLAS", "SILLAS", "MESA BANQUETE"]
+
+
+def test_pdf_sistema_descripcion_de_varias_lineas_y_medidas(export_pdf_sistema):
+    silla, _, mesa = export_pdf_sistema.filas[:3]
+    assert silla.descripcion == "SILLA TIFFANY BLANCA CON COJÍN DE LINO CRUDO (INCLUYE MOÑO)"
+    # "1.80" es una medida, no un monto: debe quedarse en la descripción.
+    assert mesa.descripcion == "MESA REDONDA DE 1.80 DIAMETRO (FORRADA EN BLANCO CON BASE BLANCA)"
+
+
+def test_pdf_sistema_montos_y_reposicion(export_pdf_sistema):
+    from scripts.generar_export_pdf_ejemplo import total_esperado
+
+    primera = export_pdf_sistema.filas[0]
+    assert (primera.cantidad, primera.precio_unitario, primera.importe) == (Decimal("120"), Decimal("45.00"), Decimal("5400.00"))
+    assert primera.costo_reposicion == Decimal("900.00")
+    assert export_pdf_sistema.filas[4].precio_unitario == Decimal("1800.00")  # "$1,800.00"
+    assert sum(f.importe for f in export_pdf_sistema.filas) == total_esperado()
+
+
+def test_generador_pdf_reproduce_el_fixture(tmp_path, mapeo):
+    from tests.conftest import requerir_weasyprint
+
+    requerir_weasyprint()
+    from scripts.generar_export_pdf_ejemplo import generar
+
+    ruta = generar(tmp_path / "export.pdf")
+    leido = leer_export(ruta.read_bytes(), ruta.name, mapeo)
+    original = leer_export(FIXTURE_PDF.read_bytes(), FIXTURE_PDF.name, mapeo)
+    assert [(f.codigo, f.descripcion, f.importe) for f in leido.filas] == [(f.codigo, f.descripcion, f.importe) for f in original.filas]
+
+
+def test_estrategia_renglones_forzada_falla_con_pdf_de_tabla(mapeo):
+    pdf = _pdf_desde_html("border: 1px solid #000;")
+    with pytest.raises(ErrorParser, match="renglones"):
+        leer_export(pdf, "export.pdf", {**mapeo, "pdf": {**mapeo["pdf"], "estrategia": "renglones"}})
+
+
+@pytest.mark.parametrize(
+    "articulo, codigo, resto",
+    [
+        ("1040 - MESA REDONDA DE PAROTA 1.80", "1040", "MESA REDONDA DE PAROTA 1.80"),
+        ("10081- MESA REDONDA ENCINO 1.80(NUEVAS)", "10081", "MESA REDONDA ENCINO 1.80(NUEVAS)"),
+        ("OC2050 - FUNDA BLANCA SNOW SILLA IMPERIAL", "OC2050", "FUNDA BLANCA SNOW SILLA IMPERIAL"),
+        ("SIL-001 - SILLA TIFFANY", "SIL-001", "SILLA TIFFANY"),
+        ("FUNDA IMPERIAL BLANCA GINEBRA", "", "FUNDA IMPERIAL BLANCA GINEBRA"),
+        ("MESA BASE 2.44 X 1.22 - MAMPARA", "", "MESA BASE 2.44 X 1.22 - MAMPARA"),
+    ],
+)
+def test_codigo_dentro_del_articulo(mapeo, articulo, codigo, resto):
+    from app.servicios.parser_export import _separar_codigo
+
+    assert _separar_codigo(articulo, mapeo["pdf"]["codigo_en_descripcion"]) == (codigo, resto)

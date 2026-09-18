@@ -75,7 +75,8 @@ cotizador-visual/
 │   │   ├── generar_placeholders.py
 │   │   └── generar_export_ejemplo.py
 │   ├── fixtures/
-│   │   ├── export_ejemplo.xlsx   # export sintético (12 filas)
+│   │   ├── export_ejemplo.pdf    # export sintético con el formato PDF del sistema (12 partidas)
+│   │   ├── export_ejemplo.xlsx   # export sintético en Excel (12 filas)
 │   │   ├── catalogo_ejemplo.csv  # 15 ítems de ejemplo
 │   │   ├── catalogo_plantilla.csv  # sólo encabezados: para el catálogo real
 │   │   └── mapeo_columnas.json   # mapeo configurable del export
@@ -150,7 +151,7 @@ python scripts/cargar_catalogo.py --csv fixtures/catalogo_plantilla.csv --imagen
 
 ## Cómo funciona
 
-- **Parser** (`servicios/parser_export.py`): lee `fixtures/mapeo_columnas.json` (hoja, fila de encabezados, columnas, celdas o regex de cliente y referencia). Para PDF usa pdfplumber: primero la estrategia de líneas y, si no hay tablas, la de texto (`pdf.estrategia` en el mapeo la fuerza). El encabezado se busca en cualquier fila.
+- **Parser** (`servicios/parser_export.py`): lee `fixtures/mapeo_columnas.json`. El sistema de la empresa exporta PDF sin tabla dibujada, con el código dentro del artículo ("1040 - MESA REDONDA…"), descripciones de varias líneas, "Reposición" bajo la cantidad y secciones; la estrategia `renglones` lo lee por posición de las palabras, separa el código con `pdf.codigo_en_descripcion`, toma cliente y número de cotización con `pdf.metadatos` y valida que la suma de partidas dé el SubTotal. Si un PDF no tiene ese formato, prueba tablas por líneas y por texto. Los .xlsx se leen con `hoja`, `fila_encabezados` y `columnas`.
 - **Matching** (`servicios/matching.py`): exacto por código normalizado. Con match asigna la imagen oficial; si no hay, la variante con más usos; si no hay ninguna, deja el ítem pendiente. Sin match, el ítem se guarda como `ad_hoc`.
 - **Imágenes generadas** (`servicios/proveedor_imagenes.py`): la base se normaliza a PNG RGBA de máximo 1024 px; `ProveedorOpenAI` usa la edición de `gpt-image-1` con `input_fidelity="high"` y un prompt fijo (forma intacta, tres cuartos, fondo neutro, luz lateral) más la petición del vendedor. Sin `OPENAI_API_KEY` actúa `ProveedorSimulado`. Cada llamada se registra en `generaciones` y hay tope diario por usuario y global (429 con la hora de liberación).
 - **PDF** (`servicios/render_pdf.py` + `plantillas/propuesta_base.html`): carta, miniaturas incrustadas como data URI, marcador "Sin imagen", etiqueta "Render conceptual" y leyenda al pie.
@@ -209,11 +210,15 @@ Prefijo `/api`. Todos requieren `Authorization: Bearer <token de Supabase>` salv
 - **Migración extra `0007_migraciones_aplicadas`** (no estaba en la lista de la sesión 2): una función que lee `schema_migrations` para que `arrancar.py` sepa qué falta sin necesitar la contraseña de la base. Aplicarlas desde el script sí necesita `SUPABASE_DB_URL` (psycopg); sin ella indica cómo hacerlo a mano.
 - **Sin archivos de configuración de Railway ni Vercel en la raíz.** Railway deprecó Config as Code (`railway.toml` no se lee en servicios nuevos) y su Infrastructure as Code sólo se aplica con la CLI; Vercel no acepta el Root Directory desde archivo. Los cuatro campos del servicio en Railway y el Root Directory en Vercel se configuran en el panel una vez, y están en "Deploy en 5 pasos".
 - **IBM Plex Sans empaquetada en el repo** (`app/fuentes`, licencia OFL) y copiada a la imagen: el paquete `fonts-ibm-plex` de Debian está en `contrib`, que la imagen slim no habilita.
+- **El PDF real del sistema no está en el repo**: es una cotización de un cliente. Las pruebas usan `fixtures/export_ejemplo.pdf`, generado por `scripts/generar_export_pdf_ejemplo.py` con el mismo formato y datos ficticios.
+- **Montos sólo con signo `$`** en el formato por renglones: sin esa regla, medidas como "1.80" o "2.44" se confundían con montos.
+- **Categoría, importe y costo de reposición** que trae el PDF se leen pero todavía no se guardan: sirven para validar la suma y quedan listos para usarse.
 - **Codificación UTF-8 con finales de línea LF** (`.gitattributes`).
 
 ## Pendientes conocidos
 
-- Ajustar `mapeo_columnas.json` con el export real.
+- Probar con más exports reales del sistema (el formato se validó con la cotización 12066).
+- El PDF del sistema ya trae la foto de muchas partidas: se podrían extraer para poblar la biblioteca, y la "Reposición" para llenar `costo_reposicion` del catálogo.
 - Identidad de marca en `propuesta_base.html`.
 - "Diseño con IA" (Fase 2): la tarjeta existe deshabilitada.
 - Paginación en la lista de propuestas si crece mucho (hoy las últimas 100).

@@ -1,12 +1,15 @@
 {
   "_notas": [
-    "Mapeo del export del sistema de la empresa. Ajustar cuando se conozca el archivo real.",
+    "Mapeo del export del sistema de la empresa. El sistema exporta PDF (sección 'pdf'); 'hoja', 'fila_encabezados', 'columnas' y 'metadatos' se usan para .xlsx y PDFs con tabla.",
     "columnas: campo interno -> texto del encabezado (se compara sin acentos ni mayúsculas).",
     "metadatos: en .xlsx se lee 'celda'; si está vacía se usa 'regex' sobre las filas previas al encabezado. En .pdf sólo aplica 'regex'.",
     "fila_encabezados es 1-based. El fixture de ejemplo tiene título y datos del cliente en las filas 1-3.",
-    "pdf.estrategia: 'auto' (líneas y luego texto), 'lineas' (tablas con bordes) o 'texto' (columnas por alineación)."
+    "pdf: formato del sistema (PDF). estrategia 'auto' lee por renglones y, si no reconoce el formato, prueba tablas ('lineas', 'texto') con 'columnas'.",
+    "pdf.encabezados: textos del renglón de encabezados que marca el inicio de las partidas en cada página.",
+    "pdf.codigo_en_descripcion: regex con un grupo que extrae el código del inicio del artículo ('1040 - MESA ...').",
+    "pdf.metadatos: 'debajo_de' (palabra bajo una etiqueta), 'etiqueta' (texto a la derecha en el mismo renglón) o 'regex'; gana el primero con valor."
   ],
-  "formato": "xlsx",
+  "formato": "pdf",
   "hoja": 0,
   "fila_encabezados": 5,
   "columnas": {
@@ -26,6 +29,23 @@
     }
   },
   "pdf": {
-    "estrategia": "auto"
+    "estrategia": "auto",
+    "encabezados": {
+      "cantidad": "Cant.",
+      "descripcion": "Artículo",
+      "precio_unitario": "Precio unit.",
+      "importe": "Total"
+    },
+    "codigo_en_descripcion": "^\\s*((?=[A-Za-z0-9-]*\\d)[A-Za-z0-9][A-Za-z0-9-]*?)\\s*-\\s+(?=\\S)",
+    "metadatos": {
+      "nombre_cliente": {
+        "etiqueta": "Cliente:",
+        "regex": "Cliente:?\\s*(.+)$"
+      },
+      "referencia_externa": {
+        "debajo_de": "Cotización",
+        "etiqueta": "Referencia:"
+      }
+    }
   }
 }
