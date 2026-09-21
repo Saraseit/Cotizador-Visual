@@ -2,7 +2,49 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Paletas. Cada variable son los canales R G B de un color (sin comas) para poder combinarlos con
+   la opacidad de Tailwind. El tema oscuro se activa con la clase `dark` en <html> (ver lib/tema.tsx). */
 @layer base {
+  :root {
+    color-scheme: light;
+    --fondo: 242 240 235; /* #F2F0EB */
+    --superficie: 255 255 255; /* #FFFFFF */
+    --velo: 26 25 22;
+    --texto: 26 25 22; /* #1A1916 */
+    --texto-secundario: 87 83 74; /* #57534A */
+    --borde: 221 216 206; /* #DDD8CE */
+    --acento: 140 74 47; /* #8C4A2F */
+    --acento-oscuro: 111 58 36; /* #6F3A24 */
+    --acento-suave: 243 229 222; /* #F3E5DE */
+    --pendiente-fondo: 253 248 236; /* #FDF8EC */
+    --pendiente-texto: 107 78 10; /* #6B4E0A */
+    --pendiente-borde: 227 206 148; /* #E3CE94 */
+    --resuelto-fondo: 231 240 234; /* #E7F0EA */
+    --resuelto-texto: 35 87 65; /* #235741 */
+    --conceptual-fondo: 243 229 222; /* #F3E5DE */
+    --conceptual-texto: 122 61 34; /* #7A3D22 */
+  }
+
+  :root.dark {
+    color-scheme: dark;
+    --fondo: 21 20 17; /* #151411 */
+    --superficie: 30 29 25; /* #1E1D19 */
+    --velo: 0 0 0;
+    --texto: 236 232 223; /* #ECE8DF */
+    --texto-secundario: 169 163 152; /* #A9A398 */
+    --borde: 56 53 45; /* #38352D */
+    --acento: 217 148 107; /* #D9946B */
+    --acento-oscuro: 230 166 127; /* #E6A67F (el "hover" se aclara en oscuro) */
+    --acento-suave: 59 42 32; /* #3B2A20 */
+    --pendiente-fondo: 42 36 18; /* #2A2412 */
+    --pendiente-texto: 232 203 126; /* #E8CB7E */
+    --pendiente-borde: 94 75 29; /* #5E4B1D */
+    --resuelto-fondo: 21 41 31; /* #15291F */
+    --resuelto-texto: 127 203 163; /* #7FCBA3 */
+    --conceptual-fondo: 53 33 26; /* #35211A */
+    --conceptual-texto: 235 170 140; /* #EBAA8C */
+  }
+
   html {
     @apply bg-fondo text-texto font-cuerpo antialiased;
   }

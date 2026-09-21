@@ -3,6 +3,7 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 
 import { Aviso } from '@/componentes/Aviso'
 import { Boton } from '@/componentes/Boton'
+import { BotonTema } from '@/componentes/BotonTema'
 import { useSesion } from '@/lib/sesion'
 import { supabase } from '@/lib/supabase'
 
@@ -35,6 +36,7 @@ export function Entrar() {
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
+      <BotonTema className="absolute right-4 top-4" />
       <div className="tarjeta w-full max-w-sm p-8">
         <h1 className="text-2xl">ProVista</h1>
         <p className="mt-1 text-sm text-texto-secundario">Minimal 4.0 · herramienta interna</p>

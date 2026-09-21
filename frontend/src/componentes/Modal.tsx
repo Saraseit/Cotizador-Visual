@@ -27,7 +27,7 @@ export function Modal({ abierto, titulo, subtitulo, alCerrar, children }: Props)
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-texto/40 p-0 sm:items-center sm:p-6"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-velo/50 p-0 sm:items-center sm:p-6"
       onMouseDown={(evento) => {
         if (evento.target === evento.currentTarget) alCerrar()
       }}

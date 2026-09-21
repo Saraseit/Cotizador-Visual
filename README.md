@@ -167,6 +167,7 @@ python scripts/cargar_catalogo.py --csv fixtures/catalogo_plantilla.csv --imagen
 - **Catálogo** (`/catalogo`): tabla con foto, medidas, etiquetas, un precio por lista y costo de reposición; formulario completo con sección de imágenes (oficial, variantes, generar con IA); carga por texto; listas de precios.
 - **Biblioteca** (`/biblioteca`): cinco métricas (incluye generaciones en 24 h) e ítems más cotizados sin foto.
 - **Usuarios** (`/usuarios`, admin): alta, rol, contraseña y baja.
+- **Tema claro/oscuro**: botón en la barra superior (y en el login) que alterna Automático → Claro → Oscuro. Automático sigue al sistema operativo y reacciona si éste cambia; la elección se recuerda en el navegador. El PDF de la propuesta no cambia: siempre es claro.
 - **Estado** (`/estado`, admin): el diagnóstico de `/api/salud` con círculo verde o rojo por dependencia. Lo primero que hay que abrir tras un deploy.
 
 ## Cómo funciona
@@ -241,6 +242,7 @@ Prefijo `/api`. Todos requieren `Authorization: Bearer <token de Supabase>` salv
 - **Códigos con punto y guion pegado** ("2008.5 - SILLA", "7029-TAPETE") se reconocen en inventario y cotizaciones.
 - **Las fotos del PDF entran a la biblioteca sin revisión**: la primera que llega de un artículo sin foto queda como oficial. Se puede reemplazar desde Catálogo; las siguientes cotizaciones sólo agregan variantes si traen una foto distinta.
 - **Huella sobre los píxeles originales** (no sobre el JPEG), para que no cambie si se ajusta la compresión.
+- **Modo oscuro con variables CSS**: los tokens de Tailwind son canales RGB en `src/index.css` (`:root` y `:root.dark`) para que el resto de la interfaz no cambie y la opacidad (`bg-fondo/60`) siga funcionando. La paleta oscura cumple contraste mínimo 4.5:1 en todos los pares de texto. El velo de las ventanas emergentes tiene su propio token (`velo`) porque con el color de texto quedaría claro. Un script en `index.html` aplica el tema antes de pintar para evitar el destello claro.
 - **Codificación UTF-8 con finales de línea LF** (`.gitattributes`).
 
 ## Pendientes conocidos

@@ -1,35 +1,41 @@
 import type { Config } from 'tailwindcss'
 
-// Tokens de diseño del Cotizador visual. Todo el color y la tipografía sale de aquí.
+// Tokens de diseño de ProVista. Todo el color y la tipografía sale de aquí.
+// Los colores son variables CSS (canales RGB, ver src/index.css) para que existan dos paletas,
+// clara y oscura, y para que los modificadores de opacidad (bg-fondo/60) sigan funcionando.
+const color = (variable: string) => `rgb(var(--${variable}) / <alpha-value>)`
+
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
     extend: {
       colors: {
-        fondo: '#F2F0EB',
-        superficie: '#FFFFFF',
+        fondo: color('fondo'),
+        superficie: color('superficie'),
+        // Fondo del velo que cubre la página detrás de una ventana emergente.
+        velo: color('velo'),
         texto: {
-          DEFAULT: '#1A1916',
-          secundario: '#57534A',
+          DEFAULT: color('texto'),
+          secundario: color('texto-secundario'),
         },
-        borde: '#DDD8CE',
+        borde: color('borde'),
         acento: {
-          DEFAULT: '#8C4A2F',
-          oscuro: '#6F3A24',
-          suave: '#F3E5DE',
+          DEFAULT: color('acento'),
+          oscuro: color('acento-oscuro'),
+          suave: color('acento-suave'),
         },
         pendiente: {
-          fondo: '#FDF8EC',
-          texto: '#6B4E0A',
-          borde: '#E3CE94',
+          fondo: color('pendiente-fondo'),
+          texto: color('pendiente-texto'),
+          borde: color('pendiente-borde'),
         },
         resuelto: {
-          fondo: '#E7F0EA',
-          texto: '#235741',
+          fondo: color('resuelto-fondo'),
+          texto: color('resuelto-texto'),
         },
         conceptual: {
-          fondo: '#F3E5DE',
-          texto: '#7A3D22',
+          fondo: color('conceptual-fondo'),
+          texto: color('conceptual-texto'),
         },
       },
       fontFamily: {

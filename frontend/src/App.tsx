@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 
 import { Disposicion } from '@/componentes/Disposicion'
 import { ProveedorSesion, RutaProtegida } from '@/lib/sesion'
+import { ProveedorTema } from '@/lib/tema'
 import { Biblioteca } from '@/rutas/biblioteca/Biblioteca'
 import { Catalogo } from '@/rutas/catalogo/Catalogo'
 import { Entrar } from '@/rutas/entrar/Entrar'
@@ -21,6 +22,7 @@ const clienteConsultas = new QueryClient({
 export function App() {
   return (
     <QueryClientProvider client={clienteConsultas}>
+      <ProveedorTema>
       <ProveedorSesion>
         <BrowserRouter>
           <Routes>
@@ -44,6 +46,7 @@ export function App() {
           </Routes>
         </BrowserRouter>
       </ProveedorSesion>
+      </ProveedorTema>
     </QueryClientProvider>
   )
 }

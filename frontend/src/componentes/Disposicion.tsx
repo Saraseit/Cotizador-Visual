@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 
 import { usePerfil } from '@/api/consultas'
+import { BotonTema } from '@/componentes/BotonTema'
 import { useSesion } from '@/lib/sesion'
 
 const PASOS = ['Subir', 'Revisar', 'Generar'] as const
@@ -97,6 +98,7 @@ export function Disposicion() {
             >
               {perfil.data?.nombre || sesion?.user.email}
             </span>
+            <BotonTema />
             <button
               type="button"
               onClick={() => void salir()}

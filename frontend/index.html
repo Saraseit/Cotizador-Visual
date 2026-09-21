@@ -4,6 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ProVista</title>
+    <meta name="color-scheme" content="light dark" />
+    <!-- Aplica el tema guardado (o el del sistema) antes de pintar, para que no haya un parpadeo claro. -->
+    <script>
+      try {
+        var guardado = localStorage.getItem('provista-tema')
+        var oscuro =
+          guardado === 'oscuro' ||
+          ((guardado === null || guardado === 'sistema') && window.matchMedia('(prefers-color-scheme: dark)').matches)
+        document.documentElement.classList.toggle('dark', oscuro)
+      } catch (e) {}
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
