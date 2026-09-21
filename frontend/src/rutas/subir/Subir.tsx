@@ -17,6 +17,15 @@ export function Subir() {
 
   const alSeleccionar = (archivo: File) => {
     setError(null)
+    // El PDF es la única entrada: trae cliente, referencia y datos del evento que el Excel no incluye.
+    // El atributo accept no cubre el arrastrar y soltar, así que se revisa aquí también.
+    if (!archivo.name.toLowerCase().endsWith('.pdf')) {
+      setError(
+        'La propuesta se arma con el PDF de la cotización, no con el Excel: solo el PDF trae el cliente, ' +
+          'el número de cotización y los datos del evento. Expórtalo desde el sistema y vuelve a subirlo.',
+      )
+      return
+    }
     crear.mutate(archivo, {
       onSuccess: (detalle) => navegar(`/cotizaciones/${detalle.id}`),
       onError: (fallo) => setError(mensajeDeError(fallo)),
@@ -28,7 +37,8 @@ export function Subir() {
       <section>
         <h1 className="text-3xl">Nueva propuesta</h1>
         <p className="mt-1 text-texto-secundario">
-          Sube el export del sistema. Resolvemos las imágenes del catálogo automáticamente y tú ajustas el resto.
+          Sube el PDF de la cotización del sistema. Resolvemos las imágenes del catálogo automáticamente y tú ajustas
+          el resto.
         </p>
         <div className="mt-6">
           <ZonaArrastre alSeleccionar={alSeleccionar} ocupado={crear.isPending} />

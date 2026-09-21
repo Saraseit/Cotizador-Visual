@@ -11,10 +11,10 @@ interface Props {
 
 export function ZonaArrastre({
   alSeleccionar,
-  aceptar = '.xlsx,.pdf',
+  aceptar = '.pdf',
   ocupado = false,
-  titulo = 'Arrastra aquí el export del sistema',
-  descripcion = 'o haz clic para elegir el archivo (.xlsx o .pdf)',
+  titulo = 'Arrastra aquí el PDF de la cotización',
+  descripcion = 'o haz clic para elegir el archivo (.pdf)',
 }: Props) {
   const entrada = useRef<HTMLInputElement>(null)
   const [arrastrando, setArrastrando] = useState(false)
