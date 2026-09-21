@@ -71,7 +71,7 @@ export function Disposicion() {
       <header className="sticky top-0 z-40 border-b border-borde bg-superficie/95 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-6 px-4 sm:px-6">
           <Link to="/" className="font-titulo text-lg font-semibold tracking-tight">
-            Cotizador visual
+            ProVista
           </Link>
           <IndicadorProgreso actual={pasoActual(ubicacion.pathname)} />
           <nav className="flex items-center gap-1">

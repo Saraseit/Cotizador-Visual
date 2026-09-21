@@ -36,7 +36,7 @@ export function Entrar() {
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <div className="tarjeta w-full max-w-sm p-8">
-        <h1 className="text-2xl">Cotizador visual</h1>
+        <h1 className="text-2xl">ProVista</h1>
         <p className="mt-1 text-sm text-texto-secundario">Minimal 4.0 · herramienta interna</p>
 
         <form onSubmit={enviar} className="mt-8 flex flex-col gap-4">
