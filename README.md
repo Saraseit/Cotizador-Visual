@@ -161,7 +161,7 @@ python scripts/cargar_catalogo.py --csv fixtures/catalogo_plantilla.csv --imagen
 
 ## Pantallas
 
-- **Subir** (`/`): arrastrar el export; propuestas recientes.
+- **Subir** (`/`): arrastrar el PDF de la cotización (sólo PDF); propuestas recientes. Las fotos que trae el PDF se guardan solas en la biblioteca de cada artículo y Revisar avisa cuántas fueron nuevas.
 - **Revisar** (`/cotizaciones/:id`): tabla con pendientes arriba; "Elegir imagen" abre *Biblioteca* (o *Subir foto* en ítems fuera de catálogo) y *Generar imagen con IA*. Al elegir una de las 4 opciones generadas, las otras 3 se borran. Si se alcanza el tope diario, el aviso ámbar dice cuál límite y cuándo se libera.
 - **Generar** (`/cotizaciones/:id/generar`): descarga del PDF; tarjeta "Diseño con IA" en Fase 2.
 - **Catálogo** (`/catalogo`): tabla con foto, medidas, etiquetas, un precio por lista y costo de reposición; formulario completo con sección de imágenes (oficial, variantes, generar con IA); carga por texto; listas de precios.
@@ -172,6 +172,7 @@ python scripts/cargar_catalogo.py --csv fixtures/catalogo_plantilla.csv --imagen
 ## Cómo funciona
 
 - **Parser** (`servicios/parser_export.py`): lee `fixtures/mapeo_columnas.json`. El sistema de la empresa exporta PDF sin tabla dibujada, con el código dentro del artículo ("1040 - MESA REDONDA…"), descripciones de varias líneas, "Reposición" bajo la cantidad y secciones; la estrategia `renglones` lo lee por posición de las palabras, separa el código con `pdf.codigo_en_descripcion`, toma cliente y número de cotización con `pdf.metadatos` y valida que la suma de partidas dé el SubTotal. Si un PDF no tiene ese formato, prueba tablas por líneas y por texto. Los .xlsx se leen con `hoja`, `fila_encabezados` y `columnas`.
+- **Fotos del PDF** (`servicios/fotos_pdf.py`): al subir la cotización se extrae la foto original de cada partida (columna FOTOGRAFÍA) y se empareja con su renglón por posición (la foto empieza ~3 pt arriba de la partida; tolerancia 15 pt). Se reduce a 1600 px, se guarda como JPEG en la biblioteca del artículo (oficial si no tenía, variante si ya tenía) y queda asignada a la partida. Las partidas fuera de catálogo reciben su foto suelta. La huella de los píxeles originales evita duplicar la misma foto entre cotizaciones. Un problema con las fotos nunca impide crear la cotización.
 - **Matching** (`servicios/matching.py`): exacto por código normalizado. Con match asigna la imagen oficial; si no hay, la variante con más usos; si no hay ninguna, deja el ítem pendiente. Sin match, el ítem se guarda como `ad_hoc`.
 - **Imágenes generadas** (`servicios/proveedor_imagenes.py`): la base se normaliza a PNG RGBA de máximo 1024 px; `ProveedorOpenAI` usa la edición de `gpt-image-1` con `input_fidelity="high"` y un prompt fijo (forma intacta, tres cuartos, fondo neutro, luz lateral) más la petición del vendedor. Sin `OPENAI_API_KEY` actúa `ProveedorSimulado`. Cada llamada se registra en `generaciones` y hay tope diario por usuario y global (429 con la hora de liberación).
 - **PDF** (`servicios/render_pdf.py` + `plantillas/propuesta_base.html`): carta, miniaturas incrustadas como data URI, marcador "Sin imagen", etiqueta "Render conceptual" y leyenda al pie.
@@ -238,6 +239,8 @@ Prefijo `/api`. Todos requieren `Authorization: Bearer <token de Supabase>` salv
 - **REPO $0.00 y la pareja REPO/PRECIO en $1.00 se tratan como sin dato**; un PRECIO de $0.00 sí se guarda (hay artículos que van incluidos, como las fundas).
 - **Medidas con las etiquetas del reporte** ("ancho · largo · alto" en mesas; "respaldo · base respaldo · asiento" en sillas y bancos), sin reinterpretarlas.
 - **Códigos con punto y guion pegado** ("2008.5 - SILLA", "7029-TAPETE") se reconocen en inventario y cotizaciones.
+- **Las fotos del PDF entran a la biblioteca sin revisión**: la primera que llega de un artículo sin foto queda como oficial. Se puede reemplazar desde Catálogo; las siguientes cotizaciones sólo agregan variantes si traen una foto distinta.
+- **Huella sobre los píxeles originales** (no sobre el JPEG), para que no cambie si se ajusta la compresión.
 - **Codificación UTF-8 con finales de línea LF** (`.gitattributes`).
 
 ## Pendientes conocidos
@@ -245,7 +248,7 @@ Prefijo `/api`. Todos requieren `Authorization: Bearer <token de Supabase>` salv
 - Probar con más exports reales del sistema (el formato se validó con la cotización 12066: 15 de 16 partidas se reconocen en el catálogo).
 - 84 artículos del inventario no tienen código en el sistema (van con código provisional `SC-…`); en las cotizaciones salen como fuera de catálogo hasta que tengan código real.
 - Revisar medidas dudosas del reporte físico, por ejemplo la 1046 trae largo 24 cm (¿244?). Las filas 3010 y 3200 del reporte de mesas periqueras venían dañadas y se omitieron.
-- El PDF del sistema ya trae la foto de muchas partidas: se podrían extraer para poblar la biblioteca, y la "Reposición" para llenar `costo_reposicion` del catálogo.
+- El catálogo no tiene forma de cambiar cuál foto es la oficial desde la interfaz (sólo subir una si no hay). Hace falta para corregir una foto oficial que llegó de un PDF.
 - Identidad de marca en `propuesta_base.html`.
 - "Diseño con IA" (Fase 2): la tarjeta existe deshabilitada.
 - Paginación en la lista de propuestas si crece mucho (hoy las últimas 100).

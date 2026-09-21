@@ -5,14 +5,19 @@ secciones, "Total de …" por sección y SubTotal al final).
 Los datos son ficticios y usan los códigos del catálogo de ejemplo, para que al subirlo en la app se
 resuelvan imágenes. Incluye un código inexistente (XXX-999) y un artículo sin código.
 
+Como el PDF real, trae la foto de cada partida en la columna FOTOGRAFÍA (un cuadro de color distinto
+por partida, ver `color_de_foto`), salvo en las de `SIN_FOTO`, y el logo en el encabezado.
+
 Uso:  python scripts/generar_export_pdf_ejemplo.py      (necesita WeasyPrint)
 """
 
 from __future__ import annotations
 
+import base64
 import sys
 from decimal import Decimal
 from html import escape
+from io import BytesIO
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -20,6 +25,7 @@ sys.path.insert(0, str(RAIZ))
 DESTINO = RAIZ / "fixtures" / "export_ejemplo.pdf"
 
 CLIENTE = "HACIENDA SAN PEDRO EVENTOS"
+SIN_FOTO = {"TAR-001", "LETRERO"}  # partidas sin foto (por código o primera palabra del artículo)
 REFERENCIA = "12345"
 
 # sección -> [(cantidad, artículo con código, precio unitario, reposición)]
@@ -59,6 +65,23 @@ SECCIONES: list[tuple[str, list[tuple[int, str, str, str]]]] = [
 ]
 
 
+def color_de_foto(indice: int) -> tuple[int, int, int]:
+    """Color sólido y distinguible de la foto de la partida `indice` (orden en el export)."""
+    return ((indice * 67) % 200 + 40, (indice * 131) % 200 + 40, (indice * 193) % 200 + 40)
+
+
+def _png(color: tuple[int, int, int], ancho: int = 320, alto: int = 240) -> str:
+    from PIL import Image
+
+    buffer = BytesIO()
+    Image.new("RGB", (ancho, alto), color).save(buffer, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
+
+
+def tiene_foto(articulo: str) -> bool:
+    return articulo.split(" ")[0] not in SIN_FOTO
+
+
 def _pesos(valor: Decimal) -> str:
     return f"${valor:,.2f}"
 
@@ -70,16 +93,19 @@ def _decimal(texto: str) -> Decimal:
 def construir_html() -> str:
     renglones: list[str] = []
     subtotal = Decimal("0")
+    indice = 0
     for seccion, partidas in SECCIONES:
         renglones.append(f'<tr><td></td><td class="seccion">{escape(seccion)}</td><td colspan="3"></td></tr>')
         total_seccion = Decimal("0")
         for cantidad, articulo, precio, reposicion in partidas:
             importe = cantidad * _decimal(precio)
             total_seccion += importe
+            foto = f'<img class="foto" src="{_png(color_de_foto(indice))}" alt="">' if tiene_foto(articulo) else ""
+            indice += 1
             renglones.append(
                 "<tr class=\"partida\">"
                 f'<td class="cant">{cantidad}<div class="rep"><b>Reposición</b><br>${reposicion}</div></td>'
-                "<td></td>"
+                f'<td class="celda-foto">{foto}</td>'
                 f'<td class="articulo">{escape(articulo)}</td>'
                 f'<td class="monto">${precio}</td>'
                 f'<td class="monto">{_pesos(importe)}</td>'
@@ -110,10 +136,13 @@ def construir_html() -> str:
   .articulo {{ width: 190pt; }}
   .monto {{ text-align: right; width: 70pt; }}
   .seccion {{ font-weight: bold; text-align: center; width: 110pt; }}
+  .celda-foto {{ width: 110pt; }}
+  .foto {{ width: 64pt; height: 48pt; display: block; margin: 0 auto; }}
+  .logo {{ width: 60pt; height: 40pt; }}
   .derecha {{ text-align: right; font-weight: bold; }}
 </style></head><body>
   <div class="cabecera">
-    <div>Minimal Estudio SA de CV<br>Mérida, Yucatán</div>
+    <div><img class="logo" src="{_png((20, 20, 20), 120, 80)}" alt=""><br>Minimal Estudio SA de CV<br>Mérida, Yucatán</div>
     <div class="caja"><b>Cotización</b><div class="numero">{REFERENCIA}</div></div>
   </div>
   <div class="datos">

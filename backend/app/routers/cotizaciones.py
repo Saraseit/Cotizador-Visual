@@ -1,5 +1,8 @@
 """Cotizaciones: subir export, listar, ver detalle, asignar imágenes y generar el PDF."""
 
+import asyncio
+import logging
+from dataclasses import replace
 from datetime import datetime, timezone
 from typing import Annotated, Any
 from uuid import UUID
@@ -18,6 +21,7 @@ from app.db.modelos import (
     calcular_estado_item,
 )
 from app.servicios import render_pdf
+from app.servicios.fotos_pdf import extraer_fotos_partidas, guardar_en_biblioteca
 from app.servicios.matching import (
     agrupar_imagenes,
     indexar_catalogo,
@@ -28,6 +32,7 @@ from app.servicios.parser_export import ErrorParser, cargar_mapeo, leer_export
 from app.servicios.storage import StorageDep, nombre_seguro
 
 router = APIRouter(prefix="/cotizaciones", tags=["cotizaciones"])
+registro = logging.getLogger("cotizador.cotizaciones")
 
 Config = Annotated[Configuracion, Depends(obtener_configuracion)]
 
@@ -137,7 +142,33 @@ async def crear_cotizacion(
             .execute()
         )
         imagenes_por_item = agrupar_imagenes(respuesta.data or [])
+    # --- Fotos del PDF a la biblioteca ----------------------------------------
+    # Se guardan antes del matching para que las partidas reciban su foto en esta misma subida.
+    # Un problema con las fotos nunca impide crear la cotización.
+    fotos_importadas, foto_por_orden = 0, {}
+    if (archivo.filename or "").lower().endswith(".pdf"):
+        try:
+            fotos = await asyncio.to_thread(extraer_fotos_partidas, contenido, export.filas)
+            fotos_importadas, foto_por_orden = await guardar_en_biblioteca(
+                db,
+                storage,
+                export.filas,
+                resolver_filas([f.codigo for f in export.filas], catalogo, imagenes_por_item),
+                catalogo,
+                imagenes_por_item,
+                fotos,
+                str(usuario.id),
+                export.referencia_externa,
+            )
+        except Exception:
+            registro.exception("No se pudieron guardar las fotos del PDF %s", archivo.filename)
+
     resultados = resolver_filas([f.codigo for f in export.filas], catalogo, imagenes_por_item)
+    # Las partidas fuera de catálogo no tienen biblioteca: reciben directamente la foto que traían.
+    resultados = [
+        replace(r, imagen_id=foto_por_orden[f.orden]) if r.tipo_item == "ad_hoc" and f.orden in foto_por_orden else r
+        for f, r in zip(export.filas, resultados)
+    ]
 
     # --- Cotización ----------------------------------------------------------
     creada = (
@@ -177,7 +208,9 @@ async def crear_cotizacion(
     ]
     await db.table("cotizacion_items").insert(filas).execute()
 
-    return await cargar_detalle(db, storage, UUID(cotizacion_id))
+    detalle = await cargar_detalle(db, storage, UUID(cotizacion_id))
+    detalle.fotos_importadas = fotos_importadas
+    return detalle
 
 
 @router.get("", response_model=list[CotizacionResumen])

@@ -27,7 +27,8 @@ export function Subir() {
       return
     }
     crear.mutate(archivo, {
-      onSuccess: (detalle) => navegar(`/cotizaciones/${detalle.id}`),
+      onSuccess: (detalle) =>
+        navegar(`/cotizaciones/${detalle.id}`, { state: { fotosImportadas: detalle.fotos_importadas ?? 0 } }),
       onError: (fallo) => setError(mensajeDeError(fallo)),
     })
   }

@@ -159,6 +159,8 @@ export interface CotizacionResumen {
 export interface CotizacionDetalle extends CotizacionResumen {
   items: CotizacionItem[]
   total: number
+  /** Sólo en la respuesta de subir: fotos nuevas del PDF guardadas en la biblioteca. */
+  fotos_importadas?: number
 }
 
 export interface ResultadoPdf {

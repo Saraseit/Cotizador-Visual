@@ -67,6 +67,9 @@ class FilaExport:
     categoria: str = ""
     importe: Decimal | None = None
     costo_reposicion: Decimal | None = None
+    # Posición del renglón en el PDF (página base 0 y `top` en pt): sirve para emparejar la foto de la partida.
+    pagina: int | None = None
+    top: float | None = None
 
 
 @dataclass
@@ -463,6 +466,8 @@ def _leer_pdf_por_renglones(paginas: list[list[list[dict[str, Any]]]], mapeo: di
                     precio_unitario=precio,
                     categoria=seccion,
                     importe=importe,
+                    pagina=renglon[0].get("pagina"),
+                    top=renglon[0]["top"],
                 )
             )
             reposicion_pendiente = False
@@ -585,7 +590,12 @@ def leer_pdf(contenido: bytes, mapeo: dict[str, Any]) -> ExportLeido:
 
     with pdf:
         try:
-            paginas = [_agrupar_renglones(p.extract_words()) for p in pdf.pages]
+            paginas = []
+            for numero, pagina in enumerate(pdf.pages):
+                palabras = pagina.extract_words()
+                for palabra in palabras:
+                    palabra["pagina"] = numero
+                paginas.append(_agrupar_renglones(palabras))
             texto = "\n".join(p.extract_text() or "" for p in pdf.pages)
         except Exception as error:
             raise ErrorParser(f"No se pudo leer el PDF: {error}") from error

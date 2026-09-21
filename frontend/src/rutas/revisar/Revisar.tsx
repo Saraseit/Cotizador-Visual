@@ -1,7 +1,7 @@
 import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table'
 import { ArrowRight, ImagePlus, RefreshCw } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 
 import { useCotizacion } from '@/api/consultas'
 import type { CotizacionItem } from '@/api/tipos'
@@ -21,6 +21,8 @@ export function Revisar() {
   const { id } = useParams<{ id: string }>()
   const navegar = useNavigate()
   const consulta = useCotizacion(id)
+  // Viene de Subir: cuántas fotos del PDF quedaron guardadas en la biblioteca.
+  const fotosImportadas = (useLocation().state as { fotosImportadas?: number } | null)?.fotosImportadas ?? 0
   const [filtro, setFiltro] = useState<Filtro>('pendientes')
   const [itemAbierto, setItemAbierto] = useState<CotizacionItem | null>(null)
 
@@ -137,6 +139,13 @@ export function Revisar() {
           </div>
         </div>
       </header>
+
+      {fotosImportadas > 0 && (
+        <Aviso tono="info" className="mt-6">
+          Se {fotosImportadas === 1 ? 'guardó 1 foto' : `guardaron ${fotosImportadas} fotos`} del PDF en la biblioteca de sus
+          artículos. Ya están asignadas a las partidas de esta cotización.
+        </Aviso>
+      )}
 
       <div className="mt-8 flex items-center gap-2" role="tablist" aria-label="Filtro de ítems">
         {(

@@ -203,6 +203,8 @@ class CotizacionResumen(BaseModel):
 class CotizacionDetalle(CotizacionResumen):
     items: list[CotizacionItem] = Field(default_factory=list)
     total: float = 0
+    # Sólo al crear: cuántas fotos nuevas del PDF se guardaron en la biblioteca.
+    fotos_importadas: int = 0
 
 
 class AsignarImagen(BaseModel):
