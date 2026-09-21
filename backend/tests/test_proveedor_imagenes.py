@@ -50,3 +50,35 @@ def test_prompt_concatena_estilo_y_peticion():
     prompt = construir_prompt("  Estilo fijo. ", " madera nogal ")
     assert prompt.startswith("Estilo fijo.")
     assert prompt.endswith("Cambio solicitado por el cliente: madera nogal")
+
+
+def test_input_fidelity_solo_para_la_familia_gpt_image_1():
+    from app.servicios.proveedor_imagenes import acepta_input_fidelity
+
+    assert acepta_input_fidelity("gpt-image-1")
+    assert acepta_input_fidelity("gpt-image-1.5")
+    assert acepta_input_fidelity("gpt-image-1-mini")
+    assert not acepta_input_fidelity("gpt-image-2.5-sunburst")
+    assert not acepta_input_fidelity("gpt-image-2.5-flare")
+    assert not acepta_input_fidelity("gpt-image-2")
+
+
+async def test_openai_no_manda_input_fidelity_con_el_modelo_nuevo():
+    from types import SimpleNamespace
+
+    from app.servicios.proveedor_imagenes import ProveedorOpenAI
+
+    llamadas: list[dict] = []
+
+    class ImagenesFalsas:
+        async def edit(self, **kwargs):
+            llamadas.append(kwargs)
+            return SimpleNamespace(data=[SimpleNamespace(b64_json="aGk=")] * kwargs["n"])
+
+    for modelo, debe_mandarla in (("gpt-image-2.5-sunburst", False), ("gpt-image-1", True)):
+        proveedor = ProveedorOpenAI(api_key="sk-prueba", modelo=modelo, prompt_estilo="estilo")
+        proveedor._cliente = SimpleNamespace(images=ImagenesFalsas())
+        salidas = await proveedor.generar_variantes(_jpg(400, 300), "nogal", 4)
+        assert len(salidas) == 4
+        assert ("input_fidelity" in llamadas[-1]) is debe_mandarla, modelo
+        assert llamadas[-1]["model"] == modelo and llamadas[-1]["n"] == 4

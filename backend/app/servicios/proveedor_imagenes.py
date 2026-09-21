@@ -1,6 +1,6 @@
 """Generación de variantes de imagen a partir de la foto oficial de un ítem.
 
-`ProveedorImagenes` es la interfaz; `ProveedorOpenAI` la implementación real (gpt-image-1,
+`ProveedorImagenes` es la interfaz; `ProveedorOpenAI` la implementación real (gpt-image-2.5-sunburst por defecto,
 endpoint de edición con imagen base). `ProveedorSimulado` sirve para desarrollar sin gastar
 créditos: devuelve la imagen base con un tinte y una etiqueta.
 
@@ -32,6 +32,12 @@ def construir_prompt(prompt_estilo: str, peticion: str) -> str:
 
 
 LADO_MAXIMO_BASE = 1024
+
+
+def acepta_input_fidelity(modelo: str) -> bool:
+    """Sólo la familia gpt-image-1 acepta `input_fidelity`; gpt-image-2.x responde 400 si se manda
+    ("does not support the 'input_fidelity' parameter", verificado el 21/09/2026)."""
+    return modelo.startswith("gpt-image-1")
 
 
 def preparar_imagen_base(datos: bytes) -> bytes:
@@ -69,6 +75,9 @@ class ProveedorOpenAI:
         from openai import OpenAIError
 
         base_png = preparar_imagen_base(imagen_base)
+        opciones: dict[str, str] = {}
+        if acepta_input_fidelity(self.modelo):
+            opciones["input_fidelity"] = "high"  # conserva la forma y detalles de la pieza original
         try:
             respuesta = await self._cliente.images.edit(
                 model=self.modelo,
@@ -77,7 +86,7 @@ class ProveedorOpenAI:
                 n=cantidad,
                 size="1024x1024",
                 quality=self._calidad,  # type: ignore[arg-type]
-                input_fidelity="high",  # conserva la forma y detalles de la pieza original
+                **opciones,
             )
         except OpenAIError as error:
             raise ErrorProveedorImagenes(f"OpenAI no pudo generar las imágenes: {error}") from error

@@ -41,11 +41,11 @@ class Configuracion(BaseSettings):
     url_firmada_segundos: int = 600
 
     # --- Generación de imágenes -------------------------------------------
-    # 'openai' usa gpt-image-1; 'simulado' devuelve variantes locales sin llamar a ningún
+    # 'openai' usa gpt-image-2.5-sunburst; 'simulado' devuelve variantes locales sin llamar a ningún
     # proveedor (útil para desarrollar sin gastar créditos).
     proveedor_imagenes: str = "openai"
     openai_api_key: str | None = None
-    openai_modelo_imagenes: str = "gpt-image-1"
+    openai_modelo_imagenes: str = "gpt-image-2.5-sunburst"
     openai_calidad_imagenes: str = "medium"
     variantes_por_generacion: int = 4
     prompt_estilo_fijo: str = PROMPT_ESTILO_POR_DEFECTO
