@@ -75,7 +75,7 @@ def _verificar_proveedor(config: Configuracion) -> dict[str, Any]:
         return _renglon(True, f"OpenAI ({config.openai_modelo_imagenes}, calidad {config.openai_calidad_imagenes}) con llave presente")
     if efectivo == "simulado":
         if config.proveedor_imagenes == "openai":
-            return _renglon(True, "Simulado: OPENAI_API_KEY vacía, no se llama a ningún proveedor (define la llave para usar gpt-image-1)")
+            return _renglon(True, "Simulado: OPENAI_API_KEY vacía, no se llama a ningún proveedor (define la llave para usar gpt-image-2.5)")
         return _renglon(True, "Simulado por configuración (PROVEEDOR_IMAGENES=simulado)")
     return _renglon(False, f"Proveedor desconocido '{efectivo}'; usa 'openai' o 'simulado'")
 
