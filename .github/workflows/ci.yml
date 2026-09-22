@@ -53,6 +53,5 @@ jobs:
       - uses: actions/checkout@v4
       - name: Construir la imagen igual que Railway
         run: docker build -f backend/Dockerfile -t cotizador-backend .
-      - name: Arranca y renderiza un PDF (sin Supabase)
-        run: |
-          docker run --rm cotizador-backend python -c "from app.servicios.render_pdf import html_a_pdf; pdf = html_a_pdf('<p style=\"font-family: IBM Plex Sans\">Prueba</p>'); assert pdf.startswith(b'%PDF-'); print('PDF OK', len(pdf), 'bytes')"
+      - name: Arranca y renderiza los PDF (sin Supabase)
+        run: docker run --rm cotizador-backend python scripts/prueba_render_imagen.py
