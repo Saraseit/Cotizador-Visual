@@ -163,6 +163,8 @@ python scripts/cargar_catalogo.py --csv fixtures/catalogo_plantilla.csv --imagen
 
 - **Subir** (`/`): arrastrar el PDF de la cotización (sólo PDF); propuestas recientes. Las fotos que trae el PDF se guardan solas en la biblioteca de cada artículo y Revisar avisa cuántas fueron nuevas.
 - **Revisar** (`/cotizaciones/:id`): tabla con pendientes arriba; "Elegir imagen" abre *Biblioteca* (o *Subir foto* en ítems fuera de catálogo) y *Generar imagen con IA*. Al elegir una de las 4 opciones generadas, las otras 3 se borran. Si se alcanza el tope diario, el aviso ámbar dice cuál límite y cuándo se libera.
+  - *Pendientes* muestra sólo las partidas sin imagen. *Todos* muestra el orden de impresión agrupado por las secciones del PDF: se arrastra una partida por su asa (dentro de su sección) o una sección completa por su título; también con teclado (Espacio y flechas). El orden se guarda al soltar.
+  - Columna *Tipo* (Partida, Flete o Montaje) y bloque *Flete y montaje*: los cargos no se imprimen como partida, se suman abajo. Al lado, los totales tal como saldrán: Subtotal, Flete, Montaje, IVA (o "más IVA") y Total.
 - **Generar** (`/cotizaciones/:id/generar`): descarga del PDF; tarjeta "Diseño con IA" en Fase 2.
 - **Catálogo** (`/catalogo`): tabla con foto, medidas, etiquetas, un precio por lista y costo de reposición; formulario completo con sección de imágenes (oficial, variantes, generar con IA); carga por texto; listas de precios.
 - **Biblioteca** (`/biblioteca`): cinco métricas (incluye generaciones en 24 h) e ítems más cotizados sin foto.
@@ -176,7 +178,8 @@ python scripts/cargar_catalogo.py --csv fixtures/catalogo_plantilla.csv --imagen
 - **Fotos del PDF** (`servicios/fotos_pdf.py`): al subir la cotización se extrae la foto original de cada partida (columna FOTOGRAFÍA) y se empareja con su renglón por posición (la foto empieza ~3 pt arriba de la partida; tolerancia 15 pt). Se reduce a 1600 px, se guarda como JPEG en la biblioteca del artículo (oficial si no tenía, variante si ya tenía) y queda asignada a la partida. Las partidas fuera de catálogo reciben su foto suelta. La huella de los píxeles originales evita duplicar la misma foto entre cotizaciones. Un problema con las fotos nunca impide crear la cotización.
 - **Matching** (`servicios/matching.py`): exacto por código normalizado. Con match asigna la imagen oficial; si no hay, la variante con más usos; si no hay ninguna, deja el ítem pendiente. Sin match, el ítem se guarda como `ad_hoc`.
 - **Imágenes generadas** (`servicios/proveedor_imagenes.py`): la base se normaliza a PNG RGBA de máximo 1024 px; `ProveedorOpenAI` usa la edición de `gpt-image-2.5-sunburst` (con `input_fidelity="high"` sólo en la familia `gpt-image-1`, que es la única que lo acepta) y un prompt fijo (forma intacta, tres cuartos, fondo neutro, luz lateral) más la petición del vendedor. Sin `OPENAI_API_KEY` actúa `ProveedorSimulado`. Cada llamada se registra en `generaciones` y hay tope diario por usuario y global (429 con la hora de liberación).
-- **PDF** (`servicios/render_pdf.py` + `plantillas/propuesta_base.html`): carta, miniaturas incrustadas como data URI, marcador "Sin imagen", etiqueta "Render conceptual" y leyenda al pie.
+- **PDF** (`servicios/render_pdf.py` + `plantillas/propuesta_base.html`): carta, partidas en el orden guardado con un título por sección, miniaturas incrustadas como data URI, marcador "Sin imagen", etiqueta "Render conceptual", totales (Subtotal, Flete, Montaje, IVA, Total) y leyenda al pie.
+- **Flete y montaje** (`servicios/cargos.py`): al subir, una partida es cargo si su descripción dice FLETE, TRANSPORTE o TRASLADO (flete) o MONTAJE, DESMONTAJE o INSTALACIÓN (montaje), o si está en una sección llamada MONTAJE. No cuenta si la palabra viene negada ("SIN INSTALACIÓN"). El vendedor lo corrige en Revisar.
 - **Reglas en base de datos**: un trigger incrementa `imagenes.usos` al asignar una imagen y marca `es_render_conceptual` cuando es `generada`.
 - **Auth**: el frontend inicia sesión con Supabase Auth y manda el `access_token`. El backend lo valida (JWKS ES256 o secret HS256, con 60 s de tolerancia de reloj) y usa la service role key para base y Storage aplicando en código las mismas reglas que las políticas RLS. Imágenes y PDFs se sirven con URLs firmadas de 10 minutos.
 - **Salud** (`/api/salud`): un renglón por dependencia; 503 sólo si Supabase no responde, para que Railway detecte el arranque y todo lo demás se pueda leer.
@@ -192,6 +195,8 @@ Prefijo `/api`. Todos requieren `Authorization: Bearer <token de Supabase>` salv
 | GET | `/cotizaciones` | Cotizaciones del usuario (admin: todas) |
 | GET | `/cotizaciones/{id}` | Detalle con ítems, imagen (URL firmada) y estado |
 | PATCH | `/cotizaciones/{id}/items/{item_id}` | `{imagen_id}` asigna o quita (`null`) la imagen |
+| PUT | `/cotizaciones/{id}/orden` | `{ids}` con las partidas en el nuevo orden de impresión |
+| PUT | `/cotizaciones/{id}/items/{item_id}/cargo` | `{cargo}`: `"flete"`, `"montaje"` o `null` (partida) |
 | POST | `/cotizaciones/{id}/generar` | Renderiza el PDF, lo guarda en `exports` y devuelve URL firmada |
 | GET | `/perfil/yo` | Perfil del usuario autenticado |
 | GET/POST | `/catalogo/items` | Búsqueda con precios e imagen oficial / alta por formulario |
@@ -234,7 +239,13 @@ Prefijo `/api`. Todos requieren `Authorization: Bearer <token de Supabase>` salv
 - **IBM Plex Sans empaquetada en el repo** (`app/fuentes`, licencia OFL) y copiada a la imagen: el paquete `fonts-ibm-plex` de Debian está en `contrib`, que la imagen slim no habilita.
 - **El PDF real del sistema no está en el repo**: es una cotización de un cliente. Las pruebas usan `fixtures/export_ejemplo.pdf`, generado por `scripts/generar_export_pdf_ejemplo.py` con el mismo formato y datos ficticios.
 - **Montos sólo con signo `$`** en el formato por renglones: sin esa regla, medidas como "1.80" o "2.44" se confundían con montos.
-- **Categoría, importe y costo de reposición** que trae el PDF se leen pero todavía no se guardan: sirven para validar la suma y quedan listos para usarse.
+- **La categoría (sección) del PDF se guarda en cada partida**; importe y costo de reposición se leen pero todavía no se guardan: sirven para validar la suma.
+- **Secciones = tramos consecutivos de la misma categoría** en el orden guardado. Una partida no se puede arrastrar a otra sección (cambiaría su título); si se necesita, se mueve la sección completa.
+- **El orden se guarda con una función en la base** (`reordenar_cotizacion`, migración 0008) que reescribe `orden` en una sola sentencia. Las partidas que no vengan en la lista conservan su orden relativo y van al final.
+- **Varias líneas de flete (o de montaje) se suman en un solo renglón** "Flete" o "Montaje". Si no hay, el renglón no aparece.
+- **El IVA se copia del PDF del sistema**, no se calcula: si el documento trae "IVA $…" se muestra ese monto y se suma al total. Si no lo trae, el total dice "(más IVA)". Cambiar una partida a flete no altera el IVA, porque es el que imprimió el sistema.
+- **Los cargos no cuentan como pendientes** ni en el número de ítems, y no se les busca imagen para el PDF.
+- **Las ediciones de una cotización no se pisan entre sí**: si el vendedor cambia el tipo mientras se guarda un orden, sólo la última respuesta se aplica y la pantalla vuelve a leer la cotización.
 - **Catálogo real cargado desde el reporte de existencias del 18/09/2026**: 792 artículos (708 con código, 84 provisionales, 8 internos inactivos), 709 con costo de reposición, 736 precios en la lista "Precio 1", 157 con medidas. El catálogo de ejemplo quedó desactivado. Los PDFs de inventario no están en el repo.
 - **La columna "PRECIO 1.00" va a la lista "Precio 1"**, no a "Público": no coincide con lo que se cotiza (la mesa 1040 está a $1,103 en el inventario y a $1,050 en la cotización 12066).
 - **REPO $0.00 y la pareja REPO/PRECIO en $1.00 se tratan como sin dato**; un PRECIO de $0.00 sí se guarda (hay artículos que van incluidos, como las fundas).
@@ -252,5 +263,6 @@ Prefijo `/api`. Todos requieren `Authorization: Bearer <token de Supabase>` salv
 - Revisar medidas dudosas del reporte físico, por ejemplo la 1046 trae largo 24 cm (¿244?). Las filas 3010 y 3200 del reporte de mesas periqueras venían dañadas y se omitieron.
 - El catálogo no tiene forma de cambiar cuál foto es la oficial desde la interfaz (sólo subir una si no hay). Hace falta para corregir una foto oficial que llegó de un PDF.
 - Identidad de marca en `propuesta_base.html`.
+- Las cotizaciones subidas antes de la migración 0008 no tienen sección guardada: se ven sin títulos de sección (se reordenan partida por partida) y sin cargos detectados (se pueden marcar a mano).
 - "Diseño con IA" (Fase 2): la tarjeta existe deshabilitada.
 - Paginación en la lista de propuestas si crece mucho (hoy las últimas 100).

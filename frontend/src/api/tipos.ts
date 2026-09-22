@@ -5,6 +5,7 @@ export type TipoImagen = 'oficial' | 'variante' | 'generada'
 export type TipoItem = 'catalogo' | 'ad_hoc'
 export type EstadoCotizacion = 'revision' | 'generada'
 export type EstadoItem = 'falta_imagen' | 'sugerida' | 'variante' | 'render_conceptual'
+export type Cargo = 'flete' | 'montaje'
 
 // --- Salud ------------------------------------------------------------------
 
@@ -137,6 +138,10 @@ export interface CotizacionItem {
   tipo_item: TipoItem
   es_render_conceptual: boolean
   orden: number
+  /** Sección del PDF del sistema ('' si no tiene). */
+  categoria: string
+  /** Si no es mobiliario: flete o montaje (se suman abajo, no se imprimen como partida). */
+  cargo: Cargo | null
   imagen: Imagen | null
   item: CatalogoItem | null
   estado: EstadoItem
@@ -158,6 +163,11 @@ export interface CotizacionResumen {
 
 export interface CotizacionDetalle extends CotizacionResumen {
   items: CotizacionItem[]
+  subtotal: number
+  flete: number
+  montaje: number
+  /** IVA impreso en el PDF del sistema; null si el documento sólo dice "más IVA". */
+  iva: number | null
   total: number
   /** Sólo en la respuesta de subir: fotos nuevas del PDF guardadas en la biblioteca. */
   fotos_importadas?: number

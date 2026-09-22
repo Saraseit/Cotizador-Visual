@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from './cliente'
-import type { CatalogoItemActualizacion, CotizacionDetalle, UsuarioActualizacion } from './tipos'
+import type { Cargo, CatalogoItemActualizacion, CotizacionDetalle, UsuarioActualizacion } from './tipos'
 
 // Las URLs firmadas duran 10 minutos: refrescamos antes de que caduquen.
 const VIDA_URLS_MS = 4 * 60 * 1000
@@ -58,16 +58,71 @@ export function useCrearCotizacion() {
   })
 }
 
+/**
+ * Las ediciones de una misma cotización (imagen, orden, tipo) pueden ir en paralelo y sus respuestas
+ * llegar desordenadas: una respuesta vieja pisaría un cambio más nuevo. Por eso sólo la última edición
+ * pendiente aplica su respuesta, y además se vuelve a leer la cotización para quedar con lo guardado.
+ */
+const llaveEdicion = (cotizacionId: string) => ['cotizaciones', cotizacionId, 'edicion'] as const
+
+function useAlTerminarEdicion(cotizacionId: string) {
+  const cliente = useQueryClient()
+  return (detalle: CotizacionDetalle | undefined) => {
+    if (cliente.isMutating({ mutationKey: llaveEdicion(cotizacionId) }) > 1) return
+    if (detalle) cliente.setQueryData(llaves.cotizacion(cotizacionId), detalle)
+    void cliente.invalidateQueries({ queryKey: llaves.cotizacion(cotizacionId), exact: true })
+  }
+}
+
 export function useAsignarImagen(cotizacionId: string) {
   const cliente = useQueryClient()
+  const alTerminar = useAlTerminarEdicion(cotizacionId)
   return useMutation({
+    mutationKey: llaveEdicion(cotizacionId),
     mutationFn: ({ itemId, imagenId }: { itemId: string; imagenId: string | null }) =>
       api.cotizaciones.asignarImagen(cotizacionId, itemId, imagenId),
-    onSuccess: (detalle: CotizacionDetalle) => {
-      cliente.setQueryData(llaves.cotizacion(cotizacionId), detalle)
-      void cliente.invalidateQueries({ queryKey: llaves.cotizaciones })
+    onSettled: (detalle) => alTerminar(detalle),
+    onSuccess: () => {
+      void cliente.invalidateQueries({ queryKey: llaves.cotizaciones, exact: true })
       void cliente.invalidateQueries({ queryKey: llaves.resumenBiblioteca })
     },
+  })
+}
+
+/** Guarda el orden de impresión. Actualiza la pantalla al instante y revierte si el servidor falla. */
+export function useReordenar(cotizacionId: string) {
+  const cliente = useQueryClient()
+  const llave = llaves.cotizacion(cotizacionId)
+  const alTerminar = useAlTerminarEdicion(cotizacionId)
+  return useMutation({
+    mutationKey: llaveEdicion(cotizacionId),
+    mutationFn: (ids: string[]) => api.cotizaciones.reordenar(cotizacionId, ids),
+    onMutate: async (ids: string[]) => {
+      await cliente.cancelQueries({ queryKey: llave })
+      const anterior = cliente.getQueryData<CotizacionDetalle>(llave)
+      if (anterior) {
+        const posicion = new Map(ids.map((id, indice) => [id, indice]))
+        const items = anterior.items.map((i) => ({ ...i, orden: posicion.get(i.id) ?? ids.length + i.orden }))
+        cliente.setQueryData<CotizacionDetalle>(llave, { ...anterior, items: items.sort((a, b) => a.orden - b.orden) })
+      }
+      return { anterior }
+    },
+    onError: (_error, _ids, contexto) => {
+      if (contexto?.anterior) cliente.setQueryData(llave, contexto.anterior)
+    },
+    onSettled: (detalle) => alTerminar(detalle),
+  })
+}
+
+export function useAsignarCargo(cotizacionId: string) {
+  const cliente = useQueryClient()
+  const alTerminar = useAlTerminarEdicion(cotizacionId)
+  return useMutation({
+    mutationKey: llaveEdicion(cotizacionId),
+    mutationFn: ({ itemId, cargo }: { itemId: string; cargo: Cargo | null }) =>
+      api.cotizaciones.asignarCargo(cotizacionId, itemId, cargo),
+    onSettled: (detalle) => alTerminar(detalle),
+    onSuccess: () => void cliente.invalidateQueries({ queryKey: llaves.cotizaciones, exact: true }),
   })
 }
 

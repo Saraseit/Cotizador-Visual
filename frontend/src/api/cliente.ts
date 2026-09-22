@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase'
 
 import type {
+  Cargo,
   CatalogoItem,
   CatalogoItemActualizacion,
   CatalogoItemEntrada,
@@ -99,6 +100,10 @@ export const api = {
     asignarImagen: (cotizacionId: string, itemId: string, imagenId: string | null) =>
       peticion<CotizacionDetalle>(`/cotizaciones/${cotizacionId}/items/${itemId}`, json({ imagen_id: imagenId }, 'PATCH')),
     generar: (id: string) => peticion<ResultadoPdf>(`/cotizaciones/${id}/generar`, { method: 'POST' }),
+    reordenar: (cotizacionId: string, ids: string[]) =>
+      peticion<CotizacionDetalle>(`/cotizaciones/${cotizacionId}/orden`, json({ ids }, 'PUT')),
+    asignarCargo: (cotizacionId: string, itemId: string, cargo: Cargo | null) =>
+      peticion<CotizacionDetalle>(`/cotizaciones/${cotizacionId}/items/${itemId}/cargo`, json({ cargo }, 'PUT')),
   },
   catalogo: {
     buscar: (termino: string, soloActivos = false) =>
