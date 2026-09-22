@@ -1,11 +1,12 @@
 """Presentación editorial de una cotización: configuración, imágenes por hueco, montajes con IA y PDF."""
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import ValidationError
 
 from app.auth import Usuario
 from app.config import Configuracion, obtener_configuracion
@@ -134,7 +135,12 @@ async def guardar_presentacion(
     cotizacion = await _fila_cotizacion(db, cotizacion_id, "*")
     _puede_editar(cotizacion, usuario)
     fila = await _fila_presentacion(db, cotizacion_id)
-    huecos = ConfigPresentacion.model_validate((fila or {}).get("config") or {}).imagenes if fila else {}
+    # Del guardado anterior sólo se conservan los huecos de imagen; el resto lo manda el cuerpo.
+    try:
+        huecos = ConfigPresentacion.model_validate((fila or {}).get("config") or {}).imagenes
+    except ValidationError:
+        registro.warning("La config guardada de %s no es válida: se guarda sin imágenes.", cotizacion_id)
+        huecos = {}
     await _guardar_config(db, cotizacion_id, ConfigPresentacion(**cuerpo.model_dump(), imagenes=huecos), usuario)
     presentacion, _, _ = await _armar(db, storage, cotizacion_id)
     return presentacion
@@ -265,7 +271,7 @@ async def generar_pdf_presentacion(
 
     pdf = await servicio.generar_pdf(detalle, presentacion.config, presentacion.secciones, crudas, storage)
 
-    marca = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    marca = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     ruta = f"cotizaciones/{cotizacion_id}/presentaciones/presentacion-{marca}.pdf"
     await storage.subir(storage.bucket_exports, ruta, pdf, "application/pdf")
     await db.table("cotizaciones").update({"estado": "generada"}).eq("id", str(cotizacion_id)).execute()

@@ -6,7 +6,14 @@ from uuid import uuid4
 import pytest
 from PIL import Image
 
-from app.db.modelos import ConfigPresentacion, CotizacionDetalle, CotizacionItem, Imagen, Paleta, SeccionPresentacion
+from app.db.modelos import (
+    ConfigPresentacion,
+    CotizacionDetalle,
+    CotizacionItem,
+    Imagen,
+    Paleta,
+    SeccionPresentacion,
+)
 from app.servicios import presentacion as pres
 
 

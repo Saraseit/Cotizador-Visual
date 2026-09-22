@@ -80,6 +80,30 @@ def _verificar_proveedor(config: Configuracion) -> dict[str, Any]:
     return _renglon(False, f"Proveedor desconocido '{efectivo}'; usa 'openai' o 'simulado'")
 
 
+def _verificar_marca() -> dict[str, Any]:
+    """La presentación editorial necesita los logos, las tipografías y su plantilla en la imagen."""
+    from app.servicios import presentacion
+
+    faltan = [
+        str(ruta.relative_to(presentacion.APP))
+        for ruta in (
+            presentacion.DIR_MARCA / "logotipo.png",
+            presentacion.DIR_MARCA / "monograma.png",
+            presentacion.DIR_FUENTES / "PublicSans-Regular.ttf",
+            presentacion.DIR_FUENTES / "BebasNeue-Regular.ttf",
+            presentacion.DIR_PLANTILLAS / presentacion.PLANTILLA,
+        )
+        if not ruta.exists()
+    ]
+    if faltan:
+        return _renglon(False, f"Faltan archivos de marca en la imagen: {', '.join(faltan)}")
+    everett = sorted(presentacion.archivos_everett())
+    detalle = f"Logos y tipografías presentes; títulos con Everett ({len(everett)} pesos)" if everett else (
+        "Logos y tipografías presentes; sin los archivos de Everett, los títulos salen en Public Sans"
+    )
+    return _renglon(True, detalle)
+
+
 def _verificar_mapeo(config: Configuracion) -> dict[str, Any]:
     try:
         mapeo = cargar_mapeo(config.ruta_mapeo_columnas)
@@ -128,6 +152,7 @@ async def salud(request: Request, config: Annotated[Configuracion, Depends(obten
 
     verificaciones["weasyprint"] = await _verificar_weasyprint()
     verificaciones["proveedor_imagenes"] = _verificar_proveedor(config)
+    verificaciones["marca"] = _verificar_marca()
     verificaciones["mapeo_columnas"] = _verificar_mapeo(config)
 
     todo_ok = all(v["ok"] for v in verificaciones.values())
