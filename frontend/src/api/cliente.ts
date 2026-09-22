@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import type {
   Cargo,
   CatalogoItem,
+  ConfigPresentacionEntrada,
   CatalogoItemActualizacion,
   CatalogoItemEntrada,
   CotizacionDetalle,
@@ -10,6 +11,7 @@ import type {
   Imagen,
   ListaPrecios,
   PerfilYo,
+  Presentacion,
   ResultadoCargaTexto,
   ResultadoGeneracion,
   ResultadoPdf,
@@ -105,13 +107,22 @@ export const api = {
     asignarCargo: (cotizacionId: string, itemId: string, cargo: Cargo | null) =>
       peticion<CotizacionDetalle>(`/cotizaciones/${cotizacionId}/items/${itemId}/cargo`, json({ cargo }, 'PUT')),
   },
+  presentacion: {
+    obtener: (cotizacionId: string) => peticion<Presentacion>(`/cotizaciones/${cotizacionId}/presentacion`),
+    guardar: (cotizacionId: string, config: ConfigPresentacionEntrada) =>
+      peticion<Presentacion>(`/cotizaciones/${cotizacionId}/presentacion`, json(config, 'PUT')),
+    asignarImagen: (cotizacionId: string, hueco: string, imagenId: string | null) =>
+      peticion<Presentacion>(`/cotizaciones/${cotizacionId}/presentacion/imagenes`, json({ hueco, imagen_id: imagenId }, 'PUT')),
+    generarMontaje: (cotizacionId: string, clave: string, indicaciones = '') =>
+      peticion<Presentacion>(`/cotizaciones/${cotizacionId}/presentacion/montajes`, json({ clave, indicaciones })),
+    pdf: (cotizacionId: string) => peticion<ResultadoPdf>(`/cotizaciones/${cotizacionId}/presentacion/pdf`, { method: 'POST' }),
+  },
   catalogo: {
     buscar: (termino: string, soloActivos = false) =>
       peticion<CatalogoItem[]>(`/catalogo/items?buscar=${encodeURIComponent(termino)}&solo_activos=${soloActivos}`),
     obtener: (id: string) => peticion<CatalogoItem>(`/catalogo/items/${id}`),
     crear: (entrada: CatalogoItemEntrada) => peticion<CatalogoItem>('/catalogo/items', json(entrada)),
-    actualizar: (id: string, cambios: CatalogoItemActualizacion) =>
-      peticion<CatalogoItem>(`/catalogo/items/${id}`, json(cambios, 'PATCH')),
+    actualizar: (id: string, cambios: CatalogoItemActualizacion) => peticion<CatalogoItem>(`/catalogo/items/${id}`, json(cambios, 'PATCH')),
     cargarTexto: (texto: string) => peticion<ResultadoCargaTexto>('/catalogo/items/carga-texto', json({ texto })),
     imagenesDeItem: (itemId: string) => peticion<Imagen[]>(`/catalogo/items/${itemId}/imagenes`),
     listasPrecios: () => peticion<ListaPrecios[]>('/catalogo/listas-precios'),
@@ -120,7 +131,13 @@ export const api = {
       peticion<ListaPrecios>(`/catalogo/listas-precios/${id}`, json(cambios, 'PATCH')),
   },
   imagenes: {
-    subir: (parametros: { archivo: File; itemId?: string | null; etiquetas?: string[]; tipo?: 'oficial' | 'variante' }) => {
+    ambientacion: () => peticion<Imagen[]>('/imagenes/ambientacion'),
+    subir: (parametros: {
+      archivo: File
+      itemId?: string | null
+      etiquetas?: string[]
+      tipo?: 'oficial' | 'variante' | 'ambientacion'
+    }) => {
       const datos = new FormData()
       datos.append('archivo', parametros.archivo)
       if (parametros.itemId) datos.append('item_id', parametros.itemId)

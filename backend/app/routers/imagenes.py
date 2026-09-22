@@ -20,6 +20,9 @@ router = APIRouter(prefix="/imagenes", tags=["imagenes"])
 Config = Annotated[Configuracion, Depends(obtener_configuracion)]
 
 TIPOS_PERMITIDOS = {"image/png", "image/jpeg", "image/webp"}
+# 'ambientacion': fotos de ambiente y montajes reales que sube el vendedor; se reutilizan entre
+# presentaciones y nunca se sugieren para una partida.
+TIPOS_SUBIDA = {"oficial", "variante", "ambientacion"}
 TAMANO_MAXIMO = 15 * 1024 * 1024
 
 
@@ -97,14 +100,18 @@ async def subir_imagen(
     """Sube una imagen a la biblioteca. Sin `item_id` queda como imagen ad hoc."""
     if archivo.content_type not in TIPOS_PERMITIDOS:
         raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, "Sólo se aceptan PNG, JPG o WebP.")
-    if tipo not in {"oficial", "variante"}:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "tipo debe ser 'oficial' o 'variante'.")
+    if tipo not in TIPOS_SUBIDA:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, "tipo debe ser 'oficial', 'variante' o 'ambientacion'."
+        )
     contenido = await archivo.read()
     if not contenido:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "El archivo está vacío.")
     if len(contenido) > TAMANO_MAXIMO:
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "La imagen supera 15 MB.")
 
+    if tipo == "ambientacion":
+        item_id = None  # la ambientación no cuelga de ningún artículo del catálogo
     codigo = await _codigo_del_item(db, item_id)
     if tipo == "oficial":
         if item_id is None:
@@ -113,7 +120,8 @@ async def subir_imagen(
         if existente.data:
             raise HTTPException(status.HTTP_409_CONFLICT, "El ítem ya tiene imagen oficial; sube una variante.")
 
-    ruta = _ruta_imagen(codigo, extension_por_tipo(archivo.content_type, archivo.filename))
+    extension = extension_por_tipo(archivo.content_type, archivo.filename)
+    ruta = f"ambientacion/{uuid4().hex}{extension}" if tipo == "ambientacion" else _ruta_imagen(codigo, extension)
     await storage.subir(storage.bucket_imagenes, ruta, contenido, archivo.content_type or "image/png")
 
     fila = {
@@ -126,6 +134,20 @@ async def subir_imagen(
     }
     creada = await db.table("imagenes").insert(fila).execute()
     return (await con_urls(storage, creada.data))[0]
+
+
+@router.get("/ambientacion", response_model=list[Imagen])
+async def listar_ambientacion(usuario: Usuario, db: ClienteDB, storage: StorageDep) -> list[Imagen]:
+    """Biblioteca de ambientación: fotos de ambiente y montajes que usan las presentaciones."""
+    respuesta = (
+        await db.table("imagenes")
+        .select("*")
+        .eq("tipo", "ambientacion")
+        .order("creado_en", desc=True)
+        .limit(200)
+        .execute()
+    )
+    return await con_urls(storage, respuesta.data or [])
 
 
 @router.post("/generar", response_model=ResultadoGeneracion)

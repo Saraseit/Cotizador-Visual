@@ -165,7 +165,8 @@ python scripts/cargar_catalogo.py --csv fixtures/catalogo_plantilla.csv --imagen
 - **Revisar** (`/cotizaciones/:id`): tabla con pendientes arriba; "Elegir imagen" abre *Biblioteca* (o *Subir foto* en ítems fuera de catálogo) y *Generar imagen con IA*. Al elegir una de las 4 opciones generadas, las otras 3 se borran. Si se alcanza el tope diario, el aviso ámbar dice cuál límite y cuándo se libera.
   - *Pendientes* muestra sólo las partidas sin imagen. *Todos* muestra el orden de impresión agrupado por las secciones del PDF: se arrastra una partida por su asa (dentro de su sección) o una sección completa por su título; también con teclado (Espacio y flechas). El orden se guarda al soltar.
   - Columna *Tipo* (Partida, Flete o Montaje) y bloque *Flete y montaje*: los cargos no se imprimen como partida, se suman abajo. Al lado, los totales tal como saldrán: Subtotal, Flete, Montaje, IVA (o "más IVA") y Total.
-- **Generar** (`/cotizaciones/:id/generar`): descarga del PDF; tarjeta "Diseño con IA" en Fase 2.
+- **Generar** (`/cotizaciones/:id/generar`): descarga del PDF base y entrada a la presentación editorial.
+- **Presentación editorial** (`/cotizaciones/:id/presentacion`, piloto): el vendedor escribe sus indicaciones (de ahí sale el prompt de los montajes), el título y el evento, elige tipografía de títulos (Everett o Bebas Neue), paleta y si se muestran los precios; pone las fotos de ambientación (portada, manifiesto y cierre) y, por sección, el título editorial, el texto en tres columnas y el montaje: subido, elegido de la biblioteca o generado con IA ("Generar los N montajes que faltan" los hace todos). "Generar PDF" guarda y muestra la presentación en la misma pantalla.
 - **Catálogo** (`/catalogo`): tabla con foto, medidas, etiquetas, un precio por lista y costo de reposición; formulario completo con sección de imágenes (oficial, variantes, generar con IA); carga por texto; listas de precios.
 - **Biblioteca** (`/biblioteca`): cinco métricas (incluye generaciones en 24 h) e ítems más cotizados sin foto.
 - **Usuarios** (`/usuarios`, admin): alta, rol, contraseña y baja.
@@ -179,6 +180,9 @@ python scripts/cargar_catalogo.py --csv fixtures/catalogo_plantilla.csv --imagen
 - **Matching** (`servicios/matching.py`): exacto por código normalizado. Con match asigna la imagen oficial; si no hay, la variante con más usos; si no hay ninguna, deja el ítem pendiente. Sin match, el ítem se guarda como `ad_hoc`.
 - **Imágenes generadas** (`servicios/proveedor_imagenes.py`): la base se normaliza a PNG RGBA de máximo 1024 px; `ProveedorOpenAI` usa la edición de `gpt-image-2.5-sunburst` (con `input_fidelity="high"` sólo en la familia `gpt-image-1`, que es la única que lo acepta) y un prompt fijo (forma intacta, tres cuartos, fondo neutro, luz lateral) más la petición del vendedor. Sin `OPENAI_API_KEY` actúa `ProveedorSimulado`. Cada llamada se registra en `generaciones` y hay tope diario por usuario y global (429 con la hora de liberación).
 - **PDF** (`servicios/render_pdf.py` + `plantillas/propuesta_base.html`): carta, partidas en el orden guardado con un título por sección, miniaturas incrustadas como data URI, marcador "Sin imagen", etiqueta "Render conceptual", totales (Subtotal, Flete, Montaje, IVA, Total) y leyenda al pie.
+- **Presentación editorial** (`servicios/presentacion.py` + `plantillas/presentacion_editorial.html`): páginas de 810 x 1080 pt (las del ejemplo de la marca): portada con foto, manifiesto, una apertura por sección con su montaje y tres columnas de texto, las piezas (2 por página hasta 4 piezas; después rejilla de 4), cierre de ambientación, concentrado y monograma. El tamaño de cada título gigante se calcula midiendo el texto con la fuente real (fontTools) para que llene el ancho sin desbordarse. Las fotos van incrustadas como data URI.
+- **Marca** (`app/marca`, `app/fuentes`): logotipo y monograma en PNG que el render recolorea sólo a colores de marca (menta #B5FFBF, negro o crema); tipografías Bebas Neue y Public Sans empaquetadas. La paleta del vendedor sólo cambia fondo, texto y acento.
+- **Montajes con IA** (`proveedor_imagenes.generar_escena`): manda hasta 6 fotos de las piezas de la sección como referencia al endpoint de edición (hasta 16 acepta el modelo) con un prompt armado con las indicaciones del vendedor, y guarda el resultado como imagen `montaje` de esa cotización. Cuenta en el mismo tope diario que las variantes y sale marcado "Render conceptual" en el PDF.
 - **Flete y montaje** (`servicios/cargos.py`): al subir, una partida es cargo si su descripción dice FLETE, TRANSPORTE o TRASLADO (flete) o MONTAJE, DESMONTAJE o INSTALACIÓN (montaje), o si está en una sección llamada MONTAJE. No cuenta si la palabra viene negada ("SIN INSTALACIÓN"). El vendedor lo corrige en Revisar.
 - **Reglas en base de datos**: un trigger incrementa `imagenes.usos` al asignar una imagen y marca `es_render_conceptual` cuando es `generada`.
 - **Auth**: el frontend inicia sesión con Supabase Auth y manda el `access_token`. El backend lo valida (JWKS ES256 o secret HS256, con 60 s de tolerancia de reloj) y usa la service role key para base y Storage aplicando en código las mismas reglas que las políticas RLS. Imágenes y PDFs se sirven con URLs firmadas de 10 minutos.
@@ -205,7 +209,13 @@ Prefijo `/api`. Todos requieren `Authorization: Bearer <token de Supabase>` salv
 | GET | `/catalogo/items/{id}/imagenes` | Imágenes del ítem: oficial primero, luego por usos |
 | GET/POST | `/catalogo/listas-precios` | Listas de precios |
 | PATCH | `/catalogo/listas-precios/{id}` | Renombrar, ordenar o desactivar |
-| POST | `/imagenes` | multipart `archivo` (+ `item_id`, `etiquetas`, `tipo`) |
+| GET | `/cotizaciones/{id}/presentacion` | Configuración de la presentación (o la de por defecto) y secciones actuales |
+| PUT | `/cotizaciones/{id}/presentacion` | Guarda indicaciones, portada, paleta, precios, textos y secciones |
+| PUT | `/cotizaciones/{id}/presentacion/imagenes` | `{hueco, imagen_id}`: portada, manifiesto, cierre o `montaje:<sección>` |
+| POST | `/cotizaciones/{id}/presentacion/montajes` | `{clave, indicaciones}` → genera el montaje de esa sección con IA |
+| POST | `/cotizaciones/{id}/presentacion/pdf` | Renderiza la presentación editorial y devuelve URL firmada |
+| GET | `/imagenes/ambientacion` | Biblioteca de fotos de ambientación |
+| POST | `/imagenes` | multipart `archivo` (+ `item_id`, `etiquetas`, `tipo`: oficial, variante o ambientacion) |
 | POST | `/imagenes/generar` | `{imagen_base_id, peticion, item_id?, cotizacion_id?}` → 4 imágenes `generada`; 429 si se alcanzó el tope |
 | DELETE | `/imagenes/{id}` | Borra una imagen generada sin asignar (del mismo usuario o admin) |
 | GET | `/biblioteca/resumen` | Métricas de la biblioteca |
@@ -254,6 +264,13 @@ Prefijo `/api`. Todos requieren `Authorization: Bearer <token de Supabase>` salv
 - **Las fotos del PDF entran a la biblioteca sin revisión**: la primera que llega de un artículo sin foto queda como oficial. Se puede reemplazar desde Catálogo; las siguientes cotizaciones sólo agregan variantes si traen una foto distinta.
 - **Huella sobre los píxeles originales** (no sobre el JPEG), para que no cambie si se ajusta la compresión.
 - **Modo oscuro con variables CSS**: los tokens de Tailwind son canales RGB en `src/index.css` (`:root` y `:root.dark`) para que el resto de la interfaz no cambie y la opacidad (`bg-fondo/60`) siga funcionando. La paleta oscura cumple contraste mínimo 4.5:1 en todos los pares de texto. El velo de las ventanas emergentes tiene su propio token (`velo`) porque con el color de texto quedaría claro. Un script en `index.html` aplica el tema antes de pintar para evitar el destello claro.
+- **La presentación editorial guarda su configuración como un jsonb** (`presentaciones.config`, migración 0009) que valida Pydantic (`ConfigPresentacion`): mientras el diseño se pule, cambiar un campo no cuesta una migración.
+- **La cotización manda sobre la presentación**: las secciones salen siempre de las partidas; lo guardado sólo aporta título, texto e incluir/excluir. Una sección que ya no existe se ignora y una nueva aparece con su título por defecto.
+- **Dos tipos nuevos de imagen**: `ambientacion` (la sube el vendedor y queda en una biblioteca compartida) y `montaje` (render generado con IA para una cotización). Ninguno se sugiere para las partidas: el matching sigue usando sólo `oficial` y `variante`.
+- **Los montajes con IA se generan a petición, de uno en uno**, no al abrir la pantalla: cada llamada cuesta dinero y cupo. "Generar los que faltan" los encadena. Al reemplazar un montaje generado, el anterior se borra de Storage.
+- **Ocultar precios afecta también al concentrado**: quedan las secciones, sus partidas y sus piezas, el total de piezas y, si la cotización los trae, una línea que dice que la propuesta considera flete y montaje.
+- **El concentrado lista todas las secciones**, incluso las que el vendedor excluyó de las páginas, para que la suma cuadre con el total de la cotización.
+- **Everett no está en el repo**: es una tipografía con licencia comercial y no venía con los archivos de marca. El render usa Public Sans (la misma que trae la presentación de ejemplo) y toma Everett automáticamente si se colocan sus archivos en `backend/app/fuentes/marca/Everett-Regular.otf` (Light y Medium opcionales).
 - **Codificación UTF-8 con finales de línea LF** (`.gitattributes`).
 
 ## Pendientes conocidos
@@ -262,7 +279,10 @@ Prefijo `/api`. Todos requieren `Authorization: Bearer <token de Supabase>` salv
 - 84 artículos del inventario no tienen código en el sistema (van con código provisional `SC-…`); en las cotizaciones salen como fuera de catálogo hasta que tengan código real.
 - Revisar medidas dudosas del reporte físico, por ejemplo la 1046 trae largo 24 cm (¿244?). Las filas 3010 y 3200 del reporte de mesas periqueras venían dañadas y se omitieron.
 - El catálogo no tiene forma de cambiar cuál foto es la oficial desde la interfaz (sólo subir una si no hay). Hace falta para corregir una foto oficial que llegó de un PDF.
-- Identidad de marca en `propuesta_base.html`.
+- Identidad de marca en `propuesta_base.html` (el PDF base sigue siendo neutro; la marca está en la presentación editorial).
+- Faltan los archivos de la tipografía Everett (ver Decisiones) y recortar el fondo de las fotos de las piezas: sobre fondo crema se nota el recuadro blanco de la foto original.
+- La biblioteca de ambientación todavía no se puede depurar desde la interfaz (no hay borrar).
+- Los textos de la presentación los escribe el vendedor; falta probar si conviene redactarlos con IA a partir de las indicaciones.
 - Las cotizaciones subidas antes de la migración 0008 no tienen sección guardada: se ven sin títulos de sección (se reordenan partida por partida) y sin cargos detectados (se pueden marcar a mano).
 - "Diseño con IA" (Fase 2): la tarjeta existe deshabilitada.
 - Paginación en la lista de propuestas si crece mucho (hoy las últimas 100).

@@ -26,6 +26,8 @@ class ProveedorImagenes(Protocol):
 
     async def generar_variantes(self, imagen_base: bytes, peticion: str, cantidad: int) -> list[bytes]: ...
 
+    async def generar_escena(self, referencias: list[bytes], prompt: str) -> bytes: ...
+
 
 def construir_prompt(prompt_estilo: str, peticion: str) -> str:
     return f"{prompt_estilo.strip()}\n\nCambio solicitado por el cliente: {peticion.strip()}"
@@ -93,13 +95,60 @@ class ProveedorOpenAI:
         except Exception as error:  # red, timeouts, etc.
             raise ErrorProveedorImagenes(f"Error inesperado al llamar a OpenAI: {error}") from error
 
+        return self._imagenes(respuesta)
+
+    async def generar_escena(self, referencias: list[bytes], prompt: str) -> bytes:
+        """Render de montaje: una imagen horizontal a partir de las fotos de las piezas de la sección.
+
+        Sin referencias usa el endpoint de generación (texto solo).
+        """
+        from openai import OpenAIError
+
+        opciones: dict[str, str] = {}
+        try:
+            if referencias:
+                archivos = [
+                    (f"pieza-{indice}.png", preparar_imagen_base(datos), "image/png")
+                    for indice, datos in enumerate(referencias[:REFERENCIAS_MAXIMAS_ESCENA])
+                ]
+                if acepta_input_fidelity(self.modelo):
+                    opciones["input_fidelity"] = "high"
+                respuesta = await self._cliente.images.edit(
+                    model=self.modelo,
+                    image=archivos,
+                    prompt=prompt,
+                    n=1,
+                    size=TAMANO_ESCENA,
+                    quality=self._calidad,  # type: ignore[arg-type]
+                    **opciones,
+                )
+            else:
+                respuesta = await self._cliente.images.generate(
+                    model=self.modelo,
+                    prompt=prompt,
+                    n=1,
+                    size=TAMANO_ESCENA,
+                    quality=self._calidad,  # type: ignore[arg-type]
+                )
+        except OpenAIError as error:
+            raise ErrorProveedorImagenes(f"OpenAI no pudo generar el montaje: {error}") from error
+        except Exception as error:
+            raise ErrorProveedorImagenes(f"Error inesperado al llamar a OpenAI: {error}") from error
+        return self._imagenes(respuesta)[0]
+
+    @staticmethod
+    def _imagenes(respuesta: object) -> list[bytes]:
         salidas: list[bytes] = []
-        for dato in respuesta.data or []:
+        for dato in getattr(respuesta, "data", None) or []:
             if dato.b64_json:
                 salidas.append(base64.b64decode(dato.b64_json))
         if not salidas:
             raise ErrorProveedorImagenes("OpenAI respondió sin imágenes.")
         return salidas
+
+
+TAMANO_ESCENA = "1536x1024"  # horizontal, para la página de apertura de cada sección
+REFERENCIAS_MAXIMAS_ESCENA = 16  # tope del endpoint de edición de los modelos gpt-image
 
 
 class ProveedorSimulado:
@@ -130,6 +179,33 @@ class ProveedorSimulado:
             variante.save(buffer, format="PNG")
             salidas.append(buffer.getvalue())
         return salidas
+
+    async def generar_escena(self, referencias: list[bytes], prompt: str) -> bytes:
+        """Montaje falso: las fotos de las piezas montadas sobre un fondo cálido, con la petición escrita."""
+        from PIL import Image, ImageDraw, ImageFont
+
+        ancho, alto = (int(v) for v in TAMANO_ESCENA.split("x"))
+        escena = Image.new("RGB", (ancho, alto), (206, 189, 170))
+        dibujo = ImageDraw.Draw(escena)
+        for y in range(alto):  # degradado sencillo, para que no sea un color plano
+            tono = int(150 + 70 * (y / alto))
+            dibujo.line([(0, y), (ancho, y)], fill=(tono, int(tono * 0.92), int(tono * 0.84)))
+
+        piezas = referencias[:6]
+        if piezas:
+            hueco = ancho // len(piezas)
+            for indice, datos in enumerate(piezas):
+                pieza = Image.open(BytesIO(datos)).convert("RGBA")
+                pieza.thumbnail((hueco - 30, alto // 2))
+                escena.paste(pieza, (indice * hueco + 15, alto - pieza.height - 60), pieza)
+
+        fuente = ImageFont.load_default(size=34)
+        dibujo.rectangle([0, 0, ancho, 110], fill=(20, 20, 20))
+        dibujo.text((24, 20), "MONTAJE SIMULADO", fill=(181, 255, 191), font=fuente)
+        dibujo.text((24, 66), " ".join(prompt.split())[:110], fill=(240, 240, 240), font=ImageFont.load_default(size=22))
+        buffer = BytesIO()
+        escena.save(buffer, format="PNG")
+        return buffer.getvalue()
 
 
 def obtener_proveedor(config: Configuracion) -> ProveedorImagenes:

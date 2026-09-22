@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>{{ titulo_portada }} · {{ evento or cliente }}</title>
+  <style>
+    /* Presentación editorial de Minimal 4.0. Página de 810 x 1080 pt (la de la presentación de ejemplo).
+       Los identificadores de marca (logotipo, monograma, menta) no dependen de la paleta. */
+    @page { size: 810pt 1080pt; margin: 0; background: {{ paleta.fondo }}; }
+
+    {% for peso, uri in everett.items() %}
+    @font-face { font-family: "Everett"; src: url("{{ uri }}"); font-weight: {{ peso }}; }
+    {% endfor %}
+    @font-face { font-family: "Public Sans"; src: url("{{ dir_fuentes }}/PublicSans-Light.ttf"); font-weight: 300; }
+    @font-face { font-family: "Public Sans"; src: url("{{ dir_fuentes }}/PublicSans-Regular.ttf"); font-weight: 400; }
+    @font-face { font-family: "Public Sans"; src: url("{{ dir_fuentes }}/PublicSans-Medium.ttf"); font-weight: 500; }
+    @font-face { font-family: "Bebas Neue"; src: url("{{ dir_fuentes }}/BebasNeue-Regular.ttf"); font-weight: 400; }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: "Everett", "Public Sans", sans-serif;
+      font-weight: 400;
+      font-size: 13pt;
+      line-height: 1.2;
+      color: {{ paleta.texto }};
+    }
+    p { margin: 0; }
+
+    .pagina { position: relative; width: 810pt; height: 1079pt; overflow: hidden; break-after: page; }
+    .pagina.flujo { height: auto; min-height: 1079pt; overflow: visible; padding: 0 40pt 60pt; }
+    .pagina:last-child { break-after: auto; }
+    .oscura { background: #000; color: {{ menta }}; }
+
+    .capa { position: absolute; background-repeat: no-repeat; background-position: center; background-size: cover; }
+    .contener { background-size: contain; }
+    .velo { position: absolute; left: 0; top: 0; width: 810pt; height: 1079pt;
+            background: linear-gradient(to bottom, rgba(0,0,0,.42), rgba(0,0,0,.12) 38%, rgba(0,0,0,.18) 62%, rgba(0,0,0,.7)); }
+
+    .titulo {
+      font-family: {{ fuente_titulos|safe }};
+      font-weight: 400;
+      text-transform: uppercase;
+      line-height: .86;
+      letter-spacing: -0.02em;
+      margin: 0;
+      white-space: nowrap;
+    }
+    .titulo.varias { white-space: normal; }
+
+    .marca { position: absolute; height: 9pt; }
+    .columnas { position: absolute; left: 40pt; width: 730pt; display: flex; }
+    .columnas .col { width: 226pt; margin-right: 26pt; font-size: 14pt; line-height: 1.2; }
+    .columnas .col:last-child { margin-right: 0; }
+    .franja { position: absolute; left: 40pt; width: 730pt; display: flex; font-size: 14pt; line-height: 1.15; text-transform: uppercase; }
+
+    .etiqueta-ia {
+      position: absolute; right: 14pt; bottom: 14pt;
+      background: rgba(0,0,0,.6); color: #fff; font-size: 8.5pt; letter-spacing: .04em;
+      padding: 3pt 8pt; border-radius: 10pt; text-transform: uppercase;
+    }
+
+    /* Piezas */
+    .foto-pieza { position: absolute; background-repeat: no-repeat; background-position: center; background-size: contain; }
+    .sin-foto { position: absolute; border: .8pt solid {{ linea }}; color: {{ texto_suave }};
+                font-size: 10pt; text-align: center; padding-top: 45%; }
+    .ficha { position: absolute; }
+    .ficha .nombre { font-size: 21pt; line-height: 1.08; text-transform: uppercase; }
+    .ficha .detalle { font-size: 12pt; margin-top: 8pt; color: {{ texto_suave }}; text-transform: lowercase; }
+    .ficha .medidas { font-size: 11pt; margin-top: 6pt; color: {{ texto_suave }}; }
+    .ficha .cifras { font-size: 12pt; margin-top: 12pt; }
+    .rejilla .ficha .nombre { font-size: 15pt; }
+    .rejilla .ficha .detalle { font-size: 10.5pt; margin-top: 5pt; }
+    .rejilla .ficha .cifras { font-size: 11pt; margin-top: 8pt; }
+
+    /* Concentrado */
+    table.concentrado { width: 100%; border-collapse: collapse; font-size: 13pt; margin-top: 34pt; }
+    .concentrado th { text-align: left; font-weight: 500; font-size: 9.5pt; letter-spacing: .08em; text-transform: uppercase;
+                      color: {{ texto_suave }}; padding: 0 0 10pt; border-bottom: 1pt solid {{ paleta.texto }}; }
+    .concentrado td { padding: 11pt 0; border-bottom: .6pt solid {{ linea }}; vertical-align: top; }
+    .concentrado .num { text-align: right; white-space: nowrap; }
+    .totales { width: 330pt; margin: 26pt 0 0 auto; border-collapse: collapse; font-size: 13pt; }
+    .totales td { padding: 6pt 0; }
+    .totales .monto { text-align: right; white-space: nowrap; }
+    .totales tr.total td { border-top: 1pt solid {{ paleta.texto }}; padding-top: 12pt; font-size: 18pt; font-weight: 500; }
+    .notas { margin-top: 40pt; font-size: 10pt; color: {{ texto_suave }}; line-height: 1.45; }
+  </style>
+</head>
+<body>
+
+{# ------------------------------------------------------------------ Portada #}
+<section class="pagina">
+  {% if fotos.portada %}
+    <div class="capa" style="left: 0; top: 0; width: 810pt; height: 600pt; background-image: url('{{ fotos.portada }}');"></div>
+  {% else %}
+    <div class="capa" style="left: 0; top: 0; width: 810pt; height: 600pt; background: {{ paleta.acento }};"></div>
+  {% endif %}
+  <div class="franja" style="top: 626pt;">
+    <div style="width: 250pt;">{{ titulo_portada }}</div>
+    <div style="width: 230pt; text-align: center;">{{ evento }}</div>
+    <div style="width: 250pt; text-align: right;"><img src="{{ logotipo_identificador }}" alt="Minimal 4.0" style="height: 11pt; margin-top: 3pt;"></div>
+  </div>
+  <h1 class="titulo varias" style="position: absolute; left: 40pt; width: 730pt; bottom: 64pt; text-align: center; font-size: {{ tamano_portada }}pt;">{{ titulo_portada }}</h1>
+</section>
+
+{# --------------------------------------------------------------- Manifiesto #}
+{% if manifiesto or fotos.manifiesto %}
+<section class="pagina oscura">
+  {% if fotos.manifiesto %}
+    <div class="capa" style="left: 0; top: 0; width: 810pt; height: 1079pt; background-image: url('{{ fotos.manifiesto }}');"></div>
+    <div class="velo"></div>
+  {% endif %}
+  <img src="{{ logotipo_menta }}" alt="Minimal 4.0" style="position: absolute; top: 70pt; left: 40pt; width: 730pt;">
+  <div class="columnas" style="bottom: 56pt;">
+    {% for texto in manifiesto %}
+      <div class="col">{% for renglon in texto|renglones %}{{ renglon }}<br>{% endfor %}</div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{# ---------------------------------------------------------------- Secciones #}
+{% for s in secciones %}
+  {% set alto_titulo = s.tamano_titulo * 0.9 %}
+  {% set tope_imagen = 76 + alto_titulo + 30 %}
+  <section class="pagina">
+    <img class="marca" src="{{ logotipo_menta }}" alt="Minimal 4.0" style="top: 40pt; left: 40pt;">
+    {% if s.montaje or s.portada_pieza %}
+      <h2 class="titulo" style="position: absolute; top: 76pt; left: 40pt; width: 730pt; text-align: center; color: {{ paleta.acento }}; font-size: {{ s.tamano_titulo }}pt;">{{ s.titulo }}</h2>
+      {% if s.montaje %}
+        <div class="capa" style="left: 0; top: {{ tope_imagen }}pt; width: 810pt; height: {{ 1079 - tope_imagen - 250 }}pt; background-image: url('{{ s.montaje }}');">
+          {% if s.montaje_conceptual %}<span class="etiqueta-ia">Render conceptual · IA</span>{% endif %}
+        </div>
+      {% else %}
+        <div class="capa contener" style="left: 90pt; top: {{ tope_imagen }}pt; width: 630pt; height: {{ 1079 - tope_imagen - 270 }}pt; background-image: url('{{ s.portada_pieza }}');"></div>
+      {% endif %}
+      <div class="columnas" style="bottom: 60pt;">
+        {% for texto in s.columnas %}<div class="col">{% for renglon in texto|renglones %}{{ renglon }}<br>{% endfor %}</div>{% endfor %}
+      </div>
+    {% else %}
+      <h2 class="titulo" style="position: absolute; top: 380pt; left: 40pt; width: 730pt; text-align: center; color: {{ paleta.acento }}; font-size: {{ s.tamano_titulo }}pt;">{{ s.titulo }}</h2>
+      <div class="columnas" style="bottom: 60pt;">
+        {% for texto in s.columnas %}<div class="col">{% for renglon in texto|renglones %}{{ renglon }}<br>{% endfor %}</div>{% endfor %}
+      </div>
+    {% endif %}
+  </section>
+
+  {% for pagina in s.paginas %}
+    <section class="pagina {{ pagina.formato }}">
+      {% if pagina.formato == 'par' %}
+        {% for p in pagina.piezas %}
+          {% set arriba = loop.first %}
+          {% set foto_x = 400 if arriba else 40 %}
+          {% set foto_y = 70 if arriba else 560 %}
+          {% if p.foto %}
+            <div class="foto-pieza" style="left: {{ foto_x }}pt; top: {{ foto_y }}pt; width: 370pt; height: 430pt; background-image: url('{{ p.foto }}');"></div>
+          {% else %}
+            <div class="sin-foto" style="left: {{ foto_x }}pt; top: {{ foto_y }}pt; width: 370pt; height: 430pt;">Sin imagen</div>
+          {% endif %}
+          <div class="ficha" style="left: {{ 40 if arriba else 440 }}pt; top: {{ 200 if arriba else 690 }}pt; width: 330pt; text-align: {{ 'right' if arriba else 'left' }};">
+            <p class="nombre">{{ p.nombre }}</p>
+            {% if p.detalle %}<p class="detalle">{{ p.detalle }}</p>{% endif %}
+            {% if p.medidas %}<p class="medidas">{{ p.medidas }}</p>{% endif %}
+            <p class="cifras">{{ p.cantidad }} {{ 'pieza' if p.cantidad == '1' else 'piezas' }}{% if mostrar_precios %} · {{ p.precio_unitario }} c/u · {{ p.importe }}{% endif %}</p>
+          </div>
+        {% endfor %}
+      {% else %}
+        {% for p in pagina.piezas %}
+          {% set x = 40 if loop.index0 % 2 == 0 else 425 %}
+          {% set y = 60 if loop.index0 < 2 else 555 %}
+          {% if p.foto %}
+            <div class="foto-pieza" style="left: {{ x }}pt; top: {{ y }}pt; width: 345pt; height: 320pt; background-image: url('{{ p.foto }}');"></div>
+          {% else %}
+            <div class="sin-foto" style="left: {{ x }}pt; top: {{ y }}pt; width: 345pt; height: 320pt;">Sin imagen</div>
+          {% endif %}
+          <div class="ficha" style="left: {{ x }}pt; top: {{ y + 334 }}pt; width: 345pt;">
+            <p class="nombre">{{ p.nombre }}</p>
+            {% if p.detalle %}<p class="detalle">{{ p.detalle }}</p>{% endif %}
+            <p class="cifras">{{ p.cantidad }} {{ 'pieza' if p.cantidad == '1' else 'piezas' }}{% if mostrar_precios %} · {{ p.precio_unitario }} c/u · {{ p.importe }}{% endif %}</p>
+          </div>
+        {% endfor %}
+      {% endif %}
+      <img class="marca" src="{{ logotipo_menta }}" alt="Minimal 4.0" style="bottom: 40pt; left: 110pt;">
+      <img class="marca" src="{{ logotipo_menta }}" alt="Minimal 4.0" style="bottom: 40pt; right: 110pt;">
+    </section>
+  {% endfor %}
+{% endfor %}
+
+{# ------------------------------------------------------ Cierre de ambientación #}
+{% if fotos.cierre %}
+<section class="pagina oscura">
+  <div class="capa" style="left: 0; top: 0; width: 810pt; height: 700pt; background-image: url('{{ fotos.cierre }}');"></div>
+  <img src="{{ logotipo_menta }}" alt="Minimal 4.0" style="position: absolute; top: 770pt; left: 40pt; width: 730pt;">
+  <div class="columnas" style="bottom: 56pt;">
+    {% for texto in cierre %}
+      <div class="col">{% for renglon in texto|renglones %}{{ renglon }}<br>{% endfor %}</div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{# --------------------------------------------------------------- Concentrado #}
+<section class="pagina flujo">
+  <img class="marca" src="{{ logotipo_menta }}" alt="Minimal 4.0" style="top: 40pt; left: 40pt;">
+  <h2 class="titulo" style="padding-top: 90pt; color: {{ paleta.acento }}; font-size: {{ tamano_concentrado }}pt;">{{ 'Inversión' if mostrar_precios else 'Resumen' }}</h2>
+  <p style="margin-top: 18pt; font-size: 14pt;">{{ evento or cliente }}{% if referencia %} · Cotización {{ referencia }}{% endif %}</p>
+
+  <table class="concentrado">
+    <thead>
+      <tr>
+        <th>Sección</th>
+        <th class="num">Partidas</th>
+        <th class="num">Piezas</th>
+        {% if mostrar_precios %}<th class="num">Importe</th>{% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for fila in concentrado %}
+        <tr>
+          <td style="text-transform: uppercase;">{{ fila.titulo }}</td>
+          <td class="num">{{ fila.partidas }}</td>
+          <td class="num">{{ fila.piezas }}</td>
+          {% if mostrar_precios %}<td class="num">{{ fila.importe }}</td>{% endif %}
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if mostrar_precios %}
+    <table class="totales">
+      {% for etiqueta, monto in totales %}
+        <tr><td>{{ etiqueta }}</td><td class="monto">{{ monto }}</td></tr>
+      {% endfor %}
+      <tr class="total"><td>Total{% if mas_iva %} <span style="font-size: 11pt; font-weight: 400;">(más IVA)</span>{% endif %}</td><td class="monto">{{ total }}</td></tr>
+    </table>
+  {% else %}
+    <table class="totales">
+      <tr class="total"><td>Total de piezas</td><td class="monto">{{ total_piezas }}</td></tr>
+    </table>
+  {% endif %}
+
+  <div class="notas">
+    {% if not mostrar_precios and (hay_flete or hay_montaje) %}
+      <p>La propuesta considera {{ 'flete y montaje' if hay_flete and hay_montaje else ('flete' if hay_flete else 'montaje') }}.</p>
+    {% endif %}
+    {% if mostrar_precios %}<p>Precios en pesos mexicanos{% if mas_iva %}, más IVA{% endif %}.</p>{% endif %}
+    {% if hay_conceptuales %}<p>Las imágenes marcadas como render conceptual se generaron con IA para ilustrar el montaje; el mobiliario y el espacio reales pueden variar.</p>{% endif %}
+    <p>{{ fecha }}{% if referencia %} · Referencia {{ referencia }}{% endif %} · minimalcuatrocero.com</p>
+  </div>
+</section>
+
+{# ----------------------------------------------------------------- Monograma #}
+<section class="pagina">
+  <img src="{{ monograma }}" alt="Minimal 4.0" style="position: absolute; left: 310pt; top: 469pt; width: 190pt;">
+</section>
+
+</body>
+</html>

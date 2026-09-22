@@ -1,7 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from './cliente'
-import type { Cargo, CatalogoItemActualizacion, CotizacionDetalle, UsuarioActualizacion } from './tipos'
+import type {
+  Cargo,
+  CatalogoItemActualizacion,
+  ConfigPresentacionEntrada,
+  CotizacionDetalle,
+  Presentacion,
+  UsuarioActualizacion,
+} from './tipos'
 
 // Las URLs firmadas duran 10 minutos: refrescamos antes de que caduquen.
 const VIDA_URLS_MS = 4 * 60 * 1000
@@ -15,6 +22,8 @@ export const llaves = {
   itemCatalogo: (id: string) => ['catalogo', 'item', id] as const,
   imagenesDeItem: (itemId: string) => ['catalogo', 'imagenes', itemId] as const,
   listasPrecios: ['catalogo', 'listas-precios'] as const,
+  presentacion: (id: string) => ['cotizaciones', id, 'presentacion'] as const,
+  ambientacion: ['imagenes', 'ambientacion'] as const,
   resumenBiblioteca: ['biblioteca', 'resumen'] as const,
   usuarios: ['usuarios'] as const,
 }
@@ -119,8 +128,7 @@ export function useAsignarCargo(cotizacionId: string) {
   const alTerminar = useAlTerminarEdicion(cotizacionId)
   return useMutation({
     mutationKey: llaveEdicion(cotizacionId),
-    mutationFn: ({ itemId, cargo }: { itemId: string; cargo: Cargo | null }) =>
-      api.cotizaciones.asignarCargo(cotizacionId, itemId, cargo),
+    mutationFn: ({ itemId, cargo }: { itemId: string; cargo: Cargo | null }) => api.cotizaciones.asignarCargo(cotizacionId, itemId, cargo),
     onSettled: (detalle) => alTerminar(detalle),
     onSuccess: () => void cliente.invalidateQueries({ queryKey: llaves.cotizaciones, exact: true }),
   })
@@ -134,6 +142,66 @@ export function useGenerarPropuesta(cotizacionId: string) {
       void cliente.invalidateQueries({ queryKey: llaves.cotizacion(cotizacionId) })
       void cliente.invalidateQueries({ queryKey: llaves.cotizaciones })
     },
+  })
+}
+
+// --- Presentación editorial -------------------------------------------------
+
+export function usePresentacion(cotizacionId: string | undefined) {
+  return useQuery({
+    queryKey: llaves.presentacion(cotizacionId ?? ''),
+    queryFn: () => api.presentacion.obtener(cotizacionId as string),
+    enabled: Boolean(cotizacionId),
+    staleTime: VIDA_URLS_MS,
+    refetchInterval: VIDA_URLS_MS,
+  })
+}
+
+/** Todas las respuestas del editor traen la presentación completa: se guarda tal cual en caché. */
+function useMutacionPresentacion<T>(cotizacionId: string, fn: (valor: T) => Promise<Presentacion>) {
+  const cliente = useQueryClient()
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: (presentacion: Presentacion) => cliente.setQueryData(llaves.presentacion(cotizacionId), presentacion),
+  })
+}
+
+export function useGuardarPresentacion(cotizacionId: string) {
+  return useMutacionPresentacion(cotizacionId, (config: ConfigPresentacionEntrada) => api.presentacion.guardar(cotizacionId, config))
+}
+
+export function useAsignarImagenPresentacion(cotizacionId: string) {
+  return useMutacionPresentacion(cotizacionId, ({ hueco, imagenId }: { hueco: string; imagenId: string | null }) =>
+    api.presentacion.asignarImagen(cotizacionId, hueco, imagenId),
+  )
+}
+
+export function useGenerarMontaje(cotizacionId: string) {
+  const cliente = useQueryClient()
+  return useMutation({
+    mutationFn: ({ clave, indicaciones }: { clave: string; indicaciones?: string }) =>
+      api.presentacion.generarMontaje(cotizacionId, clave, indicaciones ?? ''),
+    onSuccess: (presentacion: Presentacion) => {
+      cliente.setQueryData(llaves.presentacion(cotizacionId), presentacion)
+      void cliente.invalidateQueries({ queryKey: llaves.resumenBiblioteca })
+    },
+  })
+}
+
+export function useGenerarPdfPresentacion(cotizacionId: string) {
+  const cliente = useQueryClient()
+  return useMutation({
+    mutationFn: () => api.presentacion.pdf(cotizacionId),
+    onSuccess: () => void cliente.invalidateQueries({ queryKey: llaves.cotizaciones, exact: true }),
+  })
+}
+
+export function useAmbientacion(habilitado = true) {
+  return useQuery({
+    queryKey: llaves.ambientacion,
+    queryFn: api.imagenes.ambientacion,
+    enabled: habilitado,
+    staleTime: VIDA_URLS_MS,
   })
 }
 
@@ -229,6 +297,7 @@ export function useSubirImagen() {
         void cliente.invalidateQueries({ queryKey: llaves.itemCatalogo(imagen.item_id) })
       }
       void cliente.invalidateQueries({ queryKey: llaves.itemsCatalogo('') })
+      if (imagen.tipo === 'ambientacion') void cliente.invalidateQueries({ queryKey: llaves.ambientacion })
       void cliente.invalidateQueries({ queryKey: llaves.resumenBiblioteca })
     },
   })

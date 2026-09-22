@@ -91,19 +91,22 @@ export function Generar() {
           )}
         </section>
 
-        <section className="tarjeta flex flex-col p-6 opacity-70" aria-disabled="true">
+        <section className="tarjeta flex flex-col p-6">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-xl">Diseño con IA</h2>
-            <Pildora tono="neutro">Fase 2</Pildora>
+            <h2 className="text-xl">Presentación editorial</h2>
+            <Pildora tono="conceptual">Piloto</Pildora>
           </div>
           <p className="mt-2 text-sm text-texto-secundario">
-            Generará una propuesta con diseño editorial a partir de los mismos datos e imágenes de esta cotización: portada,
-            agrupación por ambientes y composición automática. Todavía no está disponible.
+            La propuesta con el diseño de Minimal 4.0: portada con foto de ambiente, una apertura por sección con su montaje
+            (tuyo o generado con IA), las piezas y el concentrado al final. Puedes ocultar los precios.
           </p>
           <div className="mt-6">
-            <Boton variante="secundario" icono={<Sparkles className="h-4 w-4" />} disabled>
-              Próximamente
-            </Boton>
+            <Link
+              to={`/cotizaciones/${cotizacion.id}/presentacion`}
+              className="inline-flex min-h-boton items-center justify-center gap-2 rounded-boton bg-acento px-4 text-sm font-medium text-superficie transition-colors hover:bg-acento-oscuro"
+            >
+              <Sparkles className="h-4 w-4" /> Armar la presentación
+            </Link>
           </div>
         </section>
       </div>

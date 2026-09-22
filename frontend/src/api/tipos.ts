@@ -1,7 +1,8 @@
 // Tipos que espejan los esquemas Pydantic del backend (backend/app/db/modelos.py).
 
 export type Rol = 'vendedor' | 'admin'
-export type TipoImagen = 'oficial' | 'variante' | 'generada'
+export type TipoImagen = 'oficial' | 'variante' | 'generada' | 'ambientacion' | 'montaje'
+export type TipografiaTitulos = 'everett' | 'bebas'
 export type TipoItem = 'catalogo' | 'ad_hoc'
 export type EstadoCotizacion = 'revision' | 'generada'
 export type EstadoItem = 'falta_imagen' | 'sugerida' | 'variante' | 'render_conceptual'
@@ -171,6 +172,57 @@ export interface CotizacionDetalle extends CotizacionResumen {
   total: number
   /** Sólo en la respuesta de subir: fotos nuevas del PDF guardadas en la biblioteca. */
   fotos_importadas?: number
+}
+
+// --- Presentación editorial --------------------------------------------------
+
+/** Colores de la presentación. Los de marca (logo, menta) no se configuran. */
+export interface Paleta {
+  fondo: string
+  texto: string
+  acento: string
+}
+
+export interface SeccionPresentacion {
+  /** Categoría del PDF del sistema; '' si la partida no traía sección. */
+  clave: string
+  titulo: string
+  texto: string
+  incluir: boolean
+}
+
+export interface ConfigPresentacionEntrada {
+  brief: string
+  titulo: string
+  evento: string
+  tipografia_titulos: TipografiaTitulos
+  paleta: Paleta
+  mostrar_precios: boolean
+  manifiesto: string[]
+  cierre: string[]
+  secciones: SeccionPresentacion[]
+}
+
+export interface ConfigPresentacion extends ConfigPresentacionEntrada {
+  /** hueco ('portada', 'manifiesto', 'cierre', 'montaje:<clave>') -> id de imagen */
+  imagenes: Record<string, string>
+}
+
+export interface SeccionVista extends SeccionPresentacion {
+  categoria: string
+  partidas: number
+  piezas: number
+  importe: number
+  /** Partidas con foto: son las referencias que se mandan a la IA para el montaje. */
+  con_imagen: number
+}
+
+export interface Presentacion {
+  cotizacion_id: string
+  config: ConfigPresentacion
+  secciones: SeccionVista[]
+  imagenes: Record<string, Imagen>
+  guardada: boolean
 }
 
 export interface ResultadoPdf {

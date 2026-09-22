@@ -39,6 +39,8 @@ export const etiquetasTipoImagen: Record<TipoImagen, { texto: string; tono: Tono
   oficial: { texto: 'Oficial', tono: 'resuelto' },
   variante: { texto: 'Variante', tono: 'neutro' },
   generada: { texto: 'Render conceptual', tono: 'conceptual' },
+  ambientacion: { texto: 'Ambientación', tono: 'neutro' },
+  montaje: { texto: 'Montaje con IA', tono: 'conceptual' },
 }
 
 export function PildoraTipoImagen({ tipo }: { tipo: TipoImagen }) {

@@ -8,9 +8,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import obtener_configuracion
 from app.db.cliente import crear_cliente
-from app.routers import biblioteca, catalogo, cotizaciones, imagenes, perfil, salud, usuarios
+from app.routers import biblioteca, catalogo, cotizaciones, imagenes, perfil, presentaciones, salud, usuarios
 
-VERSION = "0.2.4"
+VERSION = "0.2.5"
 registro = logging.getLogger("cotizador")
 
 
@@ -48,6 +48,7 @@ def crear_app() -> FastAPI:
         salud.router,
         perfil.router,
         cotizaciones.router,
+        presentaciones.router,
         catalogo.router,
         imagenes.router,
         biblioteca.router,

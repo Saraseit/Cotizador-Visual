@@ -9,6 +9,7 @@ import { Catalogo } from '@/rutas/catalogo/Catalogo'
 import { Entrar } from '@/rutas/entrar/Entrar'
 import { Estado } from '@/rutas/estado/Estado'
 import { Generar } from '@/rutas/generar/Generar'
+import { Presentacion } from '@/rutas/presentacion/Presentacion'
 import { Revisar } from '@/rutas/revisar/Revisar'
 import { Subir } from '@/rutas/subir/Subir'
 import { Usuarios } from '@/rutas/usuarios/Usuarios'
@@ -37,6 +38,7 @@ export function App() {
               <Route path="/" element={<Subir />} />
               <Route path="/cotizaciones/:id" element={<Revisar />} />
               <Route path="/cotizaciones/:id/generar" element={<Generar />} />
+              <Route path="/cotizaciones/:id/presentacion" element={<Presentacion />} />
               <Route path="/catalogo" element={<Catalogo />} />
               <Route path="/biblioteca" element={<Biblioteca />} />
               <Route path="/usuarios" element={<Usuarios />} />

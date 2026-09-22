@@ -11,7 +11,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 Rol = Literal["vendedor", "admin"]
-TipoImagen = Literal["oficial", "variante", "generada"]
+TipoImagen = Literal["oficial", "variante", "generada", "ambientacion", "montaje"]
 TipoItem = Literal["catalogo", "ad_hoc"]
 EstadoCotizacion = Literal["revision", "generada"]
 EstadoItem = Literal["falta_imagen", "sugerida", "variante", "render_conceptual"]
@@ -237,6 +237,95 @@ class AsignarImagen(BaseModel):
 class ResultadoPdf(BaseModel):
     url: str
     ruta_storage: str
+
+
+# ---------------------------------------------------------------------------
+# Presentación editorial
+# ---------------------------------------------------------------------------
+
+COLOR_HEX = r"^#[0-9A-Fa-f]{6}$"
+
+# Frases de marca por defecto (tomadas de la presentación de ejemplo de Minimal 4.0). Una por columna.
+MANIFIESTO_POR_DEFECTO = [
+    "espacios con intención.\nmobiliario con carácter.\nmomentos que permanecen.",
+    "nosotros curamos.\ntú celebras.\nel ambiente hace el resto.",
+    "mobiliario. ambientación.\nproducción.\nuna visión, cada detalle.",
+]
+CIERRE_POR_DEFECTO = [
+    "piezas con historia.\nespacios con identidad.\ndetalles que transforman.",
+    "coleccionamos objetos,\ntexturas y formas\nque despiertan emociones.",
+    "no se trata de decorar.\nse trata de crear\nuna atmósfera.",
+]
+
+# Huecos de imagen fijos; cada sección suma el suyo: "montaje:<clave de la sección>".
+HUECOS_AMBIENTACION = ("portada", "manifiesto", "cierre")
+PREFIJO_MONTAJE = "montaje:"
+
+
+class Paleta(BaseModel):
+    """Colores de la presentación (varían por propuesta). Los de marca (logo, menta) no se configuran."""
+
+    fondo: str = Field("#FFFCF7", pattern=COLOR_HEX)
+    texto: str = Field("#111111", pattern=COLOR_HEX)
+    acento: str = Field("#603D22", pattern=COLOR_HEX)
+
+
+class SeccionPresentacion(BaseModel):
+    """Lo que el vendedor ajusta de cada sección. `clave` es la categoría del PDF del sistema."""
+
+    clave: str = Field("", max_length=120)
+    titulo: str = Field("", max_length=40)
+    texto: str = Field("", max_length=900)
+    incluir: bool = True
+
+
+class ConfigPresentacionEntrada(BaseModel):
+    """Cuerpo de PUT /cotizaciones/{id}/presentacion. Las imágenes se asignan aparte, por hueco."""
+
+    brief: str = Field("", max_length=2000)
+    titulo: str = Field("PROPUESTA DE MOBILIARIO", max_length=40)
+    evento: str = Field("", max_length=80)
+    tipografia_titulos: Literal["everett", "bebas"] = "everett"
+    paleta: Paleta = Field(default_factory=Paleta)
+    mostrar_precios: bool = True
+    manifiesto: list[str] = Field(default_factory=lambda: list(MANIFIESTO_POR_DEFECTO), max_length=3)
+    cierre: list[str] = Field(default_factory=lambda: list(CIERRE_POR_DEFECTO), max_length=3)
+    secciones: list[SeccionPresentacion] = Field(default_factory=list, max_length=60)
+
+
+class ConfigPresentacion(ConfigPresentacionEntrada):
+    """Lo que se guarda en `presentaciones.config`: la entrada más la imagen de cada hueco."""
+
+    imagenes: dict[str, UUID] = Field(default_factory=dict)
+
+
+class SeccionVista(SeccionPresentacion):
+    """Sección tal como la ve el editor: lo configurado más los números de la cotización."""
+
+    categoria: str = ""  # nombre en el PDF del sistema
+    partidas: int = 0
+    piezas: float = 0
+    importe: float = 0
+    con_imagen: int = 0  # partidas con foto: son las referencias para generar el montaje
+
+
+class Presentacion(BaseModel):
+    cotizacion_id: UUID
+    config: ConfigPresentacion
+    secciones: list[SeccionVista]
+    # hueco -> imagen con URL firmada
+    imagenes: dict[str, Imagen] = Field(default_factory=dict)
+    guardada: bool = False
+
+
+class AsignarImagenPresentacion(BaseModel):
+    hueco: str = Field(min_length=3, max_length=140)
+    imagen_id: UUID | None = None
+
+
+class PeticionMontaje(BaseModel):
+    clave: str = Field("", max_length=120)
+    indicaciones: str = Field("", max_length=600)
 
 
 # ---------------------------------------------------------------------------
