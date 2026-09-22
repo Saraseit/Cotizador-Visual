@@ -37,7 +37,15 @@ build-backend = "setuptools.build_meta"
 include = ["app*"]
 
 [tool.setuptools.package-data]
-app = ["plantillas/*.html", "fuentes/*.ttf", "fuentes/LICENSE.txt"]
+# Todo lo que el render necesita en tiempo de ejecución: plantillas, tipografías y logos de marca.
+app = [
+    "plantillas/*.html",
+    "fuentes/*.ttf",
+    "fuentes/*.txt",
+    "fuentes/*.md",
+    "fuentes/marca/*",
+    "marca/*.png",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
