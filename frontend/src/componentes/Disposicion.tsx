@@ -1,4 +1,4 @@
-import { Activity, Check, Library, LogOut, Package, Users } from 'lucide-react'
+import { Activity, Check, FileText, Library, LogOut, Package, Users } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 
@@ -76,6 +76,9 @@ export function Disposicion() {
           </Link>
           <IndicadorProgreso actual={pasoActual(ubicacion.pathname)} />
           <nav className="flex items-center gap-1">
+            <Enlace a="/propuestas" icono={<FileText className="h-4 w-4" />}>
+              Propuestas
+            </Enlace>
             <Enlace a="/catalogo" icono={<Package className="h-4 w-4" />}>
               Catálogo
             </Enlace>
@@ -92,10 +95,7 @@ export function Disposicion() {
                 </Enlace>
               </>
             )}
-            <span
-              className="hidden max-w-[180px] truncate px-2 text-sm text-texto-secundario xl:inline"
-              title={sesion?.user.email ?? ''}
-            >
+            <span className="hidden max-w-[180px] truncate px-2 text-sm text-texto-secundario xl:inline" title={sesion?.user.email ?? ''}>
               {perfil.data?.nombre || sesion?.user.email}
             </span>
             <BotonTema />

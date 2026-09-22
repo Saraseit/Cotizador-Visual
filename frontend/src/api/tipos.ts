@@ -230,6 +230,19 @@ export interface ResultadoPdf {
   ruta_storage: string
 }
 
+export type TipoPdf = 'base' | 'editorial'
+
+/** Un PDF ya generado (propuesta base o presentación editorial), para la pantalla Propuestas. */
+export interface PdfGenerado {
+  id: string
+  tipo: TipoPdf
+  creado_en: string
+  /** Para ver/imprimir desde el visor del navegador. Falta si el archivo ya no está en Storage. */
+  url: string | null
+  /** Fuerza la descarga en vez de abrir el visor. */
+  url_descarga: string | null
+}
+
 // --- Biblioteca -------------------------------------------------------------
 
 export interface ItemSinImagen {

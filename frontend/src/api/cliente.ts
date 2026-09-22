@@ -10,6 +10,7 @@ import type {
   CotizacionResumen,
   Imagen,
   ListaPrecios,
+  PdfGenerado,
   PerfilYo,
   Presentacion,
   ResultadoCargaTexto,
@@ -106,6 +107,7 @@ export const api = {
       peticion<CotizacionDetalle>(`/cotizaciones/${cotizacionId}/orden`, json({ ids }, 'PUT')),
     asignarCargo: (cotizacionId: string, itemId: string, cargo: Cargo | null) =>
       peticion<CotizacionDetalle>(`/cotizaciones/${cotizacionId}/items/${itemId}/cargo`, json({ cargo }, 'PUT')),
+    pdfs: (cotizacionId: string) => peticion<PdfGenerado[]>(`/cotizaciones/${cotizacionId}/pdfs`),
   },
   presentacion: {
     obtener: (cotizacionId: string) => peticion<Presentacion>(`/cotizaciones/${cotizacionId}/presentacion`),

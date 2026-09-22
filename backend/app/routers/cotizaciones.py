@@ -18,6 +18,7 @@ from app.db.modelos import (
     CotizacionDetalle,
     CotizacionItem,
     CotizacionResumen,
+    PdfGenerado,
     Reordenar,
     ResultadoPdf,
     calcular_estado_item,
@@ -121,6 +122,15 @@ def calcular_totales(items: list[CotizacionItem], iva_documento: Any) -> dict[st
 
 async def cargar_detalle(db: Any, storage: Any, cotizacion_id: UUID) -> CotizacionDetalle:
     return await _armar_detalle(await _fila_cotizacion(db, cotizacion_id), storage)
+
+
+async def registrar_pdf(db: Any, cotizacion_id: UUID, tipo: str, ruta: str, usuario_id: UUID) -> None:
+    """Deja constancia de un PDF recién generado (propuesta base o presentación editorial), para
+    que la pantalla Propuestas pueda listar el historial. La usan `generar_propuesta` (este router)
+    y `generar_pdf_presentacion` (`routers/presentaciones.py`)."""
+    await db.table("cotizacion_pdfs").insert(
+        {"cotizacion_id": str(cotizacion_id), "tipo": tipo, "ruta_storage": ruta, "generado_por": str(usuario_id)}
+    ).execute()
 
 
 # ---------------------------------------------------------------------------
@@ -250,6 +260,39 @@ async def obtener_cotizacion(cotizacion_id: UUID, usuario: Usuario, db: ClienteD
     return await cargar_detalle(db, storage, cotizacion_id)
 
 
+@router.get("/{cotizacion_id}/pdfs", response_model=list[PdfGenerado])
+async def listar_pdfs(cotizacion_id: UUID, usuario: Usuario, db: ClienteDB, storage: StorageDep) -> list[PdfGenerado]:
+    """PDF generados de esta cotización (propuesta base y presentación editorial), más recientes primero.
+
+    Para la pantalla Propuestas: ahí se ve de un vistazo si ya hay algo listo para imprimir, aunque se
+    haya generado más de una vez o en los dos formatos.
+    """
+    await _fila_cotizacion(db, cotizacion_id, "id")
+    respuesta = (
+        await db.table("cotizacion_pdfs")
+        .select("*")
+        .eq("cotizacion_id", str(cotizacion_id))
+        .order("creado_en", desc=True)
+        .execute()
+    )
+    filas = respuesta.data or []
+    rutas = [f["ruta_storage"] for f in filas]
+    urls, urls_descarga = await asyncio.gather(
+        storage.urls_firmadas(storage.bucket_exports, rutas),
+        storage.urls_firmadas(storage.bucket_exports, rutas, descarga=True),
+    )
+    return [
+        PdfGenerado(
+            id=f["id"],
+            tipo=f["tipo"],
+            creado_en=f["creado_en"],
+            url=urls.get(f["ruta_storage"]),
+            url_descarga=urls_descarga.get(f["ruta_storage"]),
+        )
+        for f in filas
+    ]
+
+
 @router.patch("/{cotizacion_id}/items/{item_id}", response_model=CotizacionDetalle)
 async def asignar_imagen(
     cotizacion_id: UUID,
@@ -303,6 +346,7 @@ async def generar_propuesta(
     ruta = f"cotizaciones/{cotizacion_id}/propuestas/propuesta-{marca}.pdf"
     await storage.subir(storage.bucket_exports, ruta, pdf, "application/pdf")
     await db.table("cotizaciones").update({"estado": "generada"}).eq("id", str(cotizacion_id)).execute()
+    await registrar_pdf(db, cotizacion_id, "base", ruta, usuario.id)
 
     url = await storage.url_firmada(storage.bucket_exports, ruta)
     return ResultadoPdf(url=url, ruta_storage=ruta)

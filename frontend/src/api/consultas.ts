@@ -22,6 +22,7 @@ export const llaves = {
   itemCatalogo: (id: string) => ['catalogo', 'item', id] as const,
   imagenesDeItem: (itemId: string) => ['catalogo', 'imagenes', itemId] as const,
   listasPrecios: ['catalogo', 'listas-precios'] as const,
+  pdfsCotizacion: (id: string) => ['cotizaciones', id, 'pdfs'] as const,
   presentacion: (id: string) => ['cotizaciones', id, 'presentacion'] as const,
   ambientacion: ['imagenes', 'ambientacion'] as const,
   resumenBiblioteca: ['biblioteca', 'resumen'] as const,
@@ -53,6 +54,16 @@ export function useCotizacion(id: string | undefined) {
     enabled: Boolean(id),
     staleTime: VIDA_URLS_MS,
     refetchInterval: VIDA_URLS_MS,
+  })
+}
+
+/** PDF generados de una cotización (propuesta base y presentación editorial), para la pantalla Propuestas. */
+export function usePdfsCotizacion(cotizacionId: string, habilitado = true) {
+  return useQuery({
+    queryKey: llaves.pdfsCotizacion(cotizacionId),
+    queryFn: () => api.cotizaciones.pdfs(cotizacionId),
+    enabled: Boolean(cotizacionId) && habilitado,
+    staleTime: VIDA_URLS_MS,
   })
 }
 
@@ -141,6 +152,7 @@ export function useGenerarPropuesta(cotizacionId: string) {
     onSuccess: () => {
       void cliente.invalidateQueries({ queryKey: llaves.cotizacion(cotizacionId) })
       void cliente.invalidateQueries({ queryKey: llaves.cotizaciones })
+      void cliente.invalidateQueries({ queryKey: llaves.pdfsCotizacion(cotizacionId) })
     },
   })
 }
@@ -192,7 +204,10 @@ export function useGenerarPdfPresentacion(cotizacionId: string) {
   const cliente = useQueryClient()
   return useMutation({
     mutationFn: () => api.presentacion.pdf(cotizacionId),
-    onSuccess: () => void cliente.invalidateQueries({ queryKey: llaves.cotizaciones, exact: true }),
+    onSuccess: () => {
+      void cliente.invalidateQueries({ queryKey: llaves.cotizaciones, exact: true })
+      void cliente.invalidateQueries({ queryKey: llaves.pdfsCotizacion(cotizacionId) })
+    },
   })
 }
 

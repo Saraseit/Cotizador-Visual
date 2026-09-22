@@ -95,13 +95,18 @@ class Storage:
         )
         return _extraer_url(respuesta)
 
-    async def urls_firmadas(self, bucket: str, rutas: list[str]) -> dict[str, str]:
-        """Firma varias rutas en una sola llamada. Las que fallen simplemente no aparecen."""
+    async def urls_firmadas(self, bucket: str, rutas: list[str], descarga: bool = False) -> dict[str, str]:
+        """Firma varias rutas en una sola llamada. Las que fallen simplemente no aparecen.
+
+        `descarga=True` hace que el navegador guarde el archivo (Content-Disposition: attachment)
+        en vez de mostrarlo, con el nombre que ya tiene en Storage.
+        """
         unicas = sorted({r for r in rutas if r})
         if not unicas:
             return {}
+        opciones = {"download": True} if descarga else None
         respuestas = await self._cliente.storage.from_(bucket).create_signed_urls(
-            unicas, self._config.url_firmada_segundos
+            unicas, self._config.url_firmada_segundos, opciones
         )
         resultado: dict[str, str] = {}
         for respuesta in respuestas:

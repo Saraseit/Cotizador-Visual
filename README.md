@@ -162,6 +162,7 @@ python scripts/cargar_catalogo.py --csv fixtures/catalogo_plantilla.csv --imagen
 ## Pantallas
 
 - **Subir** (`/`): arrastrar el PDF de la cotización (sólo PDF); propuestas recientes. Las fotos que trae el PDF se guardan solas en la biblioteca de cada artículo y Revisar avisa cuántas fueron nuevas.
+- **Propuestas** (`/propuestas`): todas las cotizaciones (las propias; un admin ve todas), con filtro Todas/En revisión/Generadas y búsqueda por cliente o referencia. Cada fila se expande y muestra el historial completo de PDF generados de esa cotización —cada propuesta base y cada presentación editorial, con su fecha— con "Abrir para imprimir" (visor del navegador) y "Descargar" (fuerza guardar el archivo). Si no hay ninguno, enlaza de vuelta a Revisar.
 - **Revisar** (`/cotizaciones/:id`): tabla con pendientes arriba; "Elegir imagen" abre *Biblioteca* (o *Subir foto* en ítems fuera de catálogo) y *Generar imagen con IA*. Al elegir una de las 4 opciones generadas, las otras 3 se borran. Si se alcanza el tope diario, el aviso ámbar dice cuál límite y cuándo se libera.
   - *Pendientes* muestra sólo las partidas sin imagen. *Todos* muestra el orden de impresión agrupado por las secciones del PDF: se arrastra una partida por su asa (dentro de su sección) o una sección completa por su título; también con teclado (Espacio y flechas). El orden se guarda al soltar.
   - Columna *Tipo* (Partida, Flete o Montaje) y bloque *Flete y montaje*: los cargos no se imprimen como partida, se suman abajo. Al lado, los totales tal como saldrán: Subtotal, Flete, Montaje, IVA (o "más IVA") y Total.
@@ -201,7 +202,8 @@ Prefijo `/api`. Todos requieren `Authorization: Bearer <token de Supabase>` salv
 | PATCH | `/cotizaciones/{id}/items/{item_id}` | `{imagen_id}` asigna o quita (`null`) la imagen |
 | PUT | `/cotizaciones/{id}/orden` | `{ids}` con las partidas en el nuevo orden de impresión |
 | PUT | `/cotizaciones/{id}/items/{item_id}/cargo` | `{cargo}`: `"flete"`, `"montaje"` o `null` (partida) |
-| POST | `/cotizaciones/{id}/generar` | Renderiza el PDF, lo guarda en `exports` y devuelve URL firmada |
+| POST | `/cotizaciones/{id}/generar` | Renderiza el PDF, lo guarda en `exports`, registra el histórico y devuelve URL firmada |
+| GET | `/cotizaciones/{id}/pdfs` | Historial de PDF generados (base y editorial), más reciente primero; URL para ver y para descargar |
 | GET | `/perfil/yo` | Perfil del usuario autenticado |
 | GET/POST | `/catalogo/items` | Búsqueda con precios e imagen oficial / alta por formulario |
 | GET/PATCH | `/catalogo/items/{id}` | Detalle / edición parcial (`precios` reemplaza el conjunto) |
@@ -271,6 +273,9 @@ Prefijo `/api`. Todos requieren `Authorization: Bearer <token de Supabase>` salv
 - **Ocultar precios afecta también al concentrado**: quedan las secciones, sus partidas y sus piezas, el total de piezas y, si la cotización los trae, una línea que dice que la propuesta considera flete y montaje.
 - **El concentrado lista todas las secciones**, incluso las que el vendedor excluyó de las páginas, para que la suma cuadre con el total de la cotización.
 - **Everett no está en el repo**: es una tipografía con licencia comercial y no venía con los archivos de marca. El render usa Public Sans (la misma que trae la presentación de ejemplo) y toma Everett automáticamente si se colocan sus archivos en `backend/app/fuentes/marca/Everett-Regular.otf` (Light y Medium opcionales).
+- **Historial de PDF en tabla propia** (`cotizacion_pdfs`, migración 0010) en vez de listar el bucket: cada generación (base o editorial) queda registrada con su tipo y fecha, así Propuestas no depende de parsear rutas de Storage y sobrevive a que cambie el esquema de carpetas. Se borra en cascada con la cotización.
+- **Dos URLs firmadas por PDF**: una para ver/imprimir (`Content-Disposition` por defecto, se abre en el visor del navegador) y otra con `download=true` que fuerza "Guardar como" con el nombre que ya tiene en Storage. `Storage.urls_firmadas` gana un parámetro `descarga` en vez de duplicar el método.
+- **`estado` de la cotización sigue siendo un solo valor** (`revision`/`generada`): se pone en `generada` con el primer PDF de cualquier tipo, sin importar si después se generan más. El detalle de cuántos y de qué tipo vive en `/cotizaciones/{id}/pdfs`.
 - **Codificación UTF-8 con finales de línea LF** (`.gitattributes`).
 
 ## Pendientes conocidos

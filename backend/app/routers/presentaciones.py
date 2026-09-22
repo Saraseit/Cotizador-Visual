@@ -25,7 +25,7 @@ from app.db.modelos import (
     SeccionVista,
 )
 from app.routers.catalogo import con_urls
-from app.routers.cotizaciones import _fila_cotizacion, _puede_editar, cargar_detalle
+from app.routers.cotizaciones import _fila_cotizacion, _puede_editar, cargar_detalle, registrar_pdf
 from app.routers.imagenes import _verificar_tope_generaciones
 from app.servicios import presentacion as servicio
 from app.servicios.proveedor_imagenes import ErrorProveedorImagenes, obtener_proveedor
@@ -275,4 +275,5 @@ async def generar_pdf_presentacion(
     ruta = f"cotizaciones/{cotizacion_id}/presentaciones/presentacion-{marca}.pdf"
     await storage.subir(storage.bucket_exports, ruta, pdf, "application/pdf")
     await db.table("cotizaciones").update({"estado": "generada"}).eq("id", str(cotizacion_id)).execute()
+    await registrar_pdf(db, cotizacion_id, "editorial", ruta, usuario.id)
     return ResultadoPdf(url=await storage.url_firmada(storage.bucket_exports, ruta), ruta_storage=ruta)

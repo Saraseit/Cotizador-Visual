@@ -239,6 +239,21 @@ class ResultadoPdf(BaseModel):
     ruta_storage: str
 
 
+TipoPdf = Literal["base", "editorial"]
+
+
+class PdfGenerado(BaseModel):
+    """Un PDF ya generado (propuesta base o presentación editorial), para la pantalla Propuestas."""
+
+    id: UUID
+    tipo: TipoPdf
+    creado_en: datetime
+    # URL para ver/imprimir desde el visor del navegador y URL que fuerza la descarga.
+    # Cualquiera puede faltar si el archivo ya no está en Storage.
+    url: str | None = None
+    url_descarga: str | None = None
+
+
 # ---------------------------------------------------------------------------
 # Presentación editorial
 # ---------------------------------------------------------------------------
