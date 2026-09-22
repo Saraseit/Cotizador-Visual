@@ -13,14 +13,17 @@ from app.auth import Usuario, UsuarioActual
 from app.config import Configuracion, obtener_configuracion
 from app.db.cliente import ClienteDB
 from app.db.modelos import (
+    AsignarCargo,
     AsignarImagen,
     CotizacionDetalle,
     CotizacionItem,
     CotizacionResumen,
+    Reordenar,
     ResultadoPdf,
     calcular_estado_item,
 )
 from app.servicios import render_pdf
+from app.servicios.cargos import clasificar_cargo
 from app.servicios.fotos_pdf import extraer_fotos_partidas, guardar_en_biblioteca
 from app.servicios.matching import (
     agrupar_imagenes,
@@ -37,7 +40,7 @@ registro = logging.getLogger("cotizador.cotizaciones")
 Config = Annotated[Configuracion, Depends(obtener_configuracion)]
 
 SELECT_DETALLE = "*, cotizacion_items(*, imagen:imagenes(*), item:catalogo_items(*))"
-SELECT_RESUMEN = "*, cotizacion_items(id, imagen_id)"
+SELECT_RESUMEN = "*, cotizacion_items(id, imagen_id, cargo)"
 
 
 # ---------------------------------------------------------------------------
@@ -57,7 +60,7 @@ async def _fila_cotizacion(db: Any, cotizacion_id: UUID, seleccion: str = SELECT
 
 
 def _resumen_desde_fila(fila: dict[str, Any]) -> CotizacionResumen:
-    items = fila.get("cotizacion_items") or []
+    items = [i for i in fila.get("cotizacion_items") or [] if not i.get("cargo")]
     datos = {k: v for k, v in fila.items() if k != "cotizacion_items"}
     return CotizacionResumen(
         **datos,
@@ -91,13 +94,29 @@ async def _armar_detalle(fila: dict[str, Any], storage: Any) -> CotizacionDetall
         )
 
     encabezado = {k: v for k, v in fila.items() if k != "cotizacion_items"}
-    return CotizacionDetalle(
-        **encabezado,
-        items=items,
-        total=round(sum(i.importe for i in items), 2),
-        total_items=len(items),
-        items_pendientes=sum(1 for i in items if i.estado == "falta_imagen"),
-    )
+    return CotizacionDetalle(**encabezado, items=items, **calcular_totales(items, fila.get("iva_documento")))
+
+
+def calcular_totales(items: list[CotizacionItem], iva_documento: Any) -> dict[str, Any]:
+    """Subtotal de mobiliario, cargos por tipo, IVA del documento y total.
+
+    El IVA se copia del PDF del sistema (lo calcula sobre todo, cargos incluidos); si el PDF sólo
+    dice "más IVA" queda en None y el total no lo incluye.
+    """
+    partidas = [i for i in items if not i.cargo]
+    subtotal = round(sum(i.importe for i in partidas), 2)
+    flete = round(sum(i.importe for i in items if i.cargo == "flete"), 2)
+    montaje = round(sum(i.importe for i in items if i.cargo == "montaje"), 2)
+    iva = round(float(iva_documento), 2) if iva_documento is not None else None
+    return {
+        "subtotal": subtotal,
+        "flete": flete,
+        "montaje": montaje,
+        "iva": iva,
+        "total": round(subtotal + flete + montaje + (iva or 0), 2),
+        "total_items": len(partidas),
+        "items_pendientes": sum(1 for i in partidas if i.estado == "falta_imagen"),
+    }
 
 
 async def cargar_detalle(db: Any, storage: Any, cotizacion_id: UUID) -> CotizacionDetalle:
@@ -179,6 +198,7 @@ async def crear_cotizacion(
                 "referencia_externa": export.referencia_externa,
                 "creado_por": str(usuario.id),
                 "estado": "revision",
+                "iva_documento": str(export.iva) if export.iva is not None else None,
             }
         )
         .execute()
@@ -203,6 +223,8 @@ async def crear_cotizacion(
             "imagen_id": resultado.imagen_id,
             "tipo_item": resultado.tipo_item,
             "orden": fila.orden,
+            "categoria": fila.categoria or "",
+            "cargo": clasificar_cargo(fila.descripcion, fila.categoria),
         }
         for fila, resultado in zip(export.filas, resultados)
     ]
@@ -284,3 +306,38 @@ async def generar_propuesta(
 
     url = await storage.url_firmada(storage.bucket_exports, ruta)
     return ResultadoPdf(url=url, ruta_storage=ruta)
+
+
+@router.put("/{cotizacion_id}/orden", response_model=CotizacionDetalle)
+async def reordenar_partidas(
+    cotizacion_id: UUID, cuerpo: Reordenar, usuario: Usuario, db: ClienteDB, storage: StorageDep
+) -> CotizacionDetalle:
+    """Guarda el orden en que se imprimirán las partidas (lo arma el vendedor arrastrando en Revisar)."""
+    cotizacion = await _fila_cotizacion(db, cotizacion_id, "*")
+    _puede_editar(cotizacion, usuario)
+    propias = await db.table("cotizacion_items").select("id").eq("cotizacion_id", str(cotizacion_id)).execute()
+    ids_propios = {str(f["id"]) for f in propias.data or []}
+    ajenos = [str(i) for i in cuerpo.ids if str(i) not in ids_propios]
+    if ajenos:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Hay partidas que no pertenecen a esta cotización.")
+    await db.rpc("reordenar_cotizacion", {"p_cotizacion": str(cotizacion_id), "p_ids": [str(i) for i in cuerpo.ids]}).execute()
+    return await cargar_detalle(db, storage, cotizacion_id)
+
+
+@router.put("/{cotizacion_id}/items/{item_id}/cargo", response_model=CotizacionDetalle)
+async def asignar_cargo(
+    cotizacion_id: UUID, item_id: UUID, cuerpo: AsignarCargo, usuario: Usuario, db: ClienteDB, storage: StorageDep
+) -> CotizacionDetalle:
+    """Marca una partida como flete o montaje (o la devuelve a mobiliario con `null`)."""
+    cotizacion = await _fila_cotizacion(db, cotizacion_id, "*")
+    _puede_editar(cotizacion, usuario)
+    actualizado = (
+        await db.table("cotizacion_items")
+        .update({"cargo": cuerpo.cargo})
+        .eq("id", str(item_id))
+        .eq("cotizacion_id", str(cotizacion_id))
+        .execute()
+    )
+    if not actualizado.data:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "El ítem no pertenece a esta cotización.")
+    return await cargar_detalle(db, storage, cotizacion_id)

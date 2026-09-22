@@ -90,11 +90,12 @@ def _decimal(texto: str) -> Decimal:
     return Decimal(texto.replace(",", ""))
 
 
-def construir_html() -> str:
+def construir_html(secciones=None, iva: Decimal | None = None) -> str:
+    secciones = SECCIONES if secciones is None else secciones
     renglones: list[str] = []
     subtotal = Decimal("0")
     indice = 0
-    for seccion, partidas in SECCIONES:
+    for seccion, partidas in secciones:
         renglones.append(f'<tr><td></td><td class="seccion">{escape(seccion)}</td><td colspan="3"></td></tr>')
         total_seccion = Decimal("0")
         for cantidad, articulo, precio, reposicion in partidas:
@@ -154,19 +155,20 @@ def construir_html() -> str:
     <tbody>{"".join(renglones)}</tbody>
   </table>
   <p style="margin-top: 16pt">Importe deposito de Garantía: $0.00 &nbsp;&nbsp;&nbsp; SubTotal: {_pesos(subtotal)}</p>
+  {f'<p>IVA {_pesos(iva)}</p>' if iva is not None else ''}
   <p>DIAS: 1.0</p>
   <p>Notas: 1.- Todos los precios son mas IVA.</p>
 </body></html>"""
 
 
-def generar(destino: Path = DESTINO) -> Path:
+def generar(destino: Path = DESTINO, secciones=None, iva: Decimal | None = None) -> Path:
     from app.servicios.render_pdf import _preparar_gtk_en_windows
 
     _preparar_gtk_en_windows()
     from weasyprint import HTML
 
     destino.parent.mkdir(parents=True, exist_ok=True)
-    HTML(string=construir_html()).write_pdf(destino)
+    HTML(string=construir_html(secciones, iva)).write_pdf(destino)
     return destino
 
 

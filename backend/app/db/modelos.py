@@ -15,6 +15,7 @@ TipoImagen = Literal["oficial", "variante", "generada"]
 TipoItem = Literal["catalogo", "ad_hoc"]
 EstadoCotizacion = Literal["revision", "generada"]
 EstadoItem = Literal["falta_imagen", "sugerida", "variante", "render_conceptual"]
+Cargo = Literal["flete", "montaje"]
 
 
 # ---------------------------------------------------------------------------
@@ -180,6 +181,9 @@ class CotizacionItem(BaseModel):
     tipo_item: TipoItem
     es_render_conceptual: bool = False
     orden: int = 0
+    # Sección del PDF del sistema ('' si no tiene) y, si no es mobiliario, el tipo de cargo.
+    categoria: str = ""
+    cargo: Cargo | None = None
     # Campos calculados
     imagen: Imagen | None = None
     item: CatalogoItem | None = None
@@ -202,9 +206,26 @@ class CotizacionResumen(BaseModel):
 
 class CotizacionDetalle(CotizacionResumen):
     items: list[CotizacionItem] = Field(default_factory=list)
+    # Totales: subtotal de las partidas de mobiliario, cargos, IVA del PDF (None = "más IVA") y total.
+    subtotal: float = 0
+    flete: float = 0
+    montaje: float = 0
+    iva: float | None = None
     total: float = 0
     # Sólo al crear: cuántas fotos nuevas del PDF se guardaron en la biblioteca.
     fotos_importadas: int = 0
+
+
+class Reordenar(BaseModel):
+    """Ids de las partidas en el nuevo orden. Las que no vengan conservan su orden y van al final."""
+
+    ids: list[UUID] = Field(min_length=1)
+
+
+class AsignarCargo(BaseModel):
+    """`null` devuelve la partida a mobiliario normal."""
+
+    cargo: Cargo | None = None
 
 
 class AsignarImagen(BaseModel):

@@ -116,6 +116,18 @@
     table.totales td { padding: 6pt; }
     table.totales .etiqueta { text-align: right; color: #57534A; }
     table.totales .valor { text-align: right; font-size: 13pt; font-weight: 600; width: 120pt; border-top: 1.5pt solid #1A1916; }
+    table.totales .monto { text-align: right; width: 120pt; }
+    table.totales tr.parcial td { padding-top: 3pt; padding-bottom: 3pt; }
+    table.items tr.seccion td {
+      padding: 12pt 6pt 4pt 6pt;
+      font-size: 9pt;
+      font-weight: 600;
+      letter-spacing: 0.6pt;
+      text-transform: uppercase;
+      color: #57534A;
+      border-bottom: 1pt solid #1A1916;
+    }
+    table.items tr.seccion { page-break-after: avoid; }
 
     .leyenda {
       margin-top: 18pt;
@@ -159,7 +171,11 @@
       </tr>
     </thead>
     <tbody>
-      {% for item in items %}
+      {% for seccion in secciones %}
+      {% if seccion.titulo %}
+      <tr class="seccion"><td colspan="5">{{ seccion.titulo }}</td></tr>
+      {% endif %}
+      {% for item in seccion.items %}
       <tr>
         <td class="col-imagen">
           {% if item.imagen_data_uri %}
@@ -181,12 +197,19 @@
         <td class="col-importe">{{ item.importe }}</td>
       </tr>
       {% endfor %}
+      {% endfor %}
     </tbody>
   </table>
 
   <table class="totales">
+    {% for etiqueta, valor in totales %}
+    <tr class="parcial">
+      <td class="etiqueta">{{ etiqueta }}{% if loop.first %} ({{ total_items }} {{ "partida" if total_items == 1 else "partidas" }}){% endif %}</td>
+      <td class="monto">{{ valor }}</td>
+    </tr>
+    {% endfor %}
     <tr>
-      <td class="etiqueta">Total ({{ total_items }} {{ "partida" if total_items == 1 else "partidas" }})</td>
+      <td class="etiqueta">Total{% if mas_iva %} (más IVA){% endif %}</td>
       <td class="valor">{{ total }}</td>
     </tr>
   </table>

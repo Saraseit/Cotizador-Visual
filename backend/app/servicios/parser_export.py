@@ -78,6 +78,8 @@ class ExportLeido:
     referencia_externa: str
     filas: list[FilaExport]
     advertencias: list[str] = field(default_factory=list)
+    # IVA impreso en el PDF del sistema; None si el documento sólo dice "más IVA" (o es un .xlsx).
+    iva: Decimal | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -389,7 +391,26 @@ def _es_encabezado(renglon: list[dict[str, Any]], encabezados: dict[str, str]) -
     return bool(necesarias) and all(any(n and (n == c or c.startswith(n)) for c in claves) for n in necesarias)
 
 
-def _leer_pdf_por_renglones(paginas: list[list[list[dict[str, Any]]]], mapeo: dict[str, Any]) -> tuple[list[FilaExport], list[str]] | None:
+def _buscar_iva(renglones: list[list[dict[str, Any]]]) -> Decimal | None:
+    """IVA del bloque de totales: la palabra "IVA" seguida de un monto en el mismo renglón.
+
+    Se detiene en las notas ("Notas:", "IMPORTANTE DE LEER"), donde "más IVA." no lleva monto.
+    """
+    for renglon in renglones:
+        if _clave(renglon[0]["text"]) in {"notas", "importante"}:
+            return None
+        for indice, palabra in enumerate(renglon):
+            if _clave(palabra["text"]) != "iva":
+                continue
+            monto = next((w for w in renglon[indice + 1 :] if _DINERO.match(w["text"])), None)
+            if monto is not None:
+                return a_decimal(monto["text"])
+    return None
+
+
+def _leer_pdf_por_renglones(
+    paginas: list[list[list[dict[str, Any]]]], mapeo: dict[str, Any]
+) -> tuple[list[FilaExport], list[str], Decimal | None] | None:
     """Lee exports cuyo cuerpo no es una tabla con bordes (como el del sistema de Minimal 4.0).
 
     Cada página: se busca el renglón de encabezados (`pdf.encabezados`, p. ej. "CANT." y "ARTÍCULO")
@@ -435,18 +456,25 @@ def _leer_pdf_por_renglones(paginas: list[list[list[dict[str, Any]]]], mapeo: di
     seccion = ""
     reposicion_pendiente = False
     subtotal: Decimal | None = None
+    iva: Decimal | None = None
 
     def continuar(palabras: list[dict[str, Any]]) -> None:
         if palabras and filas:
             filas[-1].descripcion = f"{filas[-1].descripcion} {_texto(palabras)}".strip()
 
-    for renglon in cuerpo:
+    for indice_renglon, renglon in enumerate(cuerpo):
         texto = _texto(renglon)
         clave_inicio = _clave(renglon[0]["text"])
         if "subtotal" in _clave(texto) or clave_inicio.startswith("importe"):
-            montos = [w for w in renglon if _DINERO.match(w["text"])]
-            if "subtotal" in _clave(texto) and montos:
-                subtotal = a_decimal(montos[-1]["text"])
+            # SubTotal e IVA pueden ir en el mismo renglón o en los siguientes: se toma el monto
+            # que sigue a la palabra "SubTotal" (no el último, que podría ser el IVA).
+            for i, palabra in enumerate(renglon):
+                if "subtotal" in _clave(palabra["text"]):
+                    monto = next((w for w in renglon[i + 1 :] if _DINERO.match(w["text"])), None)
+                    if monto is not None:
+                        subtotal = a_decimal(monto["text"])
+                    break
+            iva = _buscar_iva(cuerpo[indice_renglon:])
             break
 
         izquierda = [w for w in renglon if w["x0"] < limite_izquierda]
@@ -510,7 +538,7 @@ def _leer_pdf_por_renglones(paginas: list[list[list[dict[str, Any]]]], mapeo: di
         suma = sum((f.importe if f.importe is not None else f.cantidad * f.precio_unitario) for f in filas)
         if abs(suma - subtotal) > Decimal("0.5"):
             advertencias.append(f"La suma de partidas ({suma}) no coincide con el SubTotal del documento ({subtotal}).")
-    return filas, advertencias
+    return filas, advertencias, iva
 
 
 # --- Estrategias de tabla ("lineas" y "texto") -----------------------------------
@@ -604,11 +632,12 @@ def leer_pdf(contenido: bytes, mapeo: dict[str, Any]) -> ExportLeido:
 
         filas: list[FilaExport] | None = None
         advertencias: list[str] = []
+        iva: Decimal | None = None
         usada = ""
         if estrategia in ("auto", "renglones"):
             resultado = _leer_pdf_por_renglones(paginas, mapeo)
             if resultado is not None:
-                filas, advertencias = resultado
+                filas, advertencias, iva = resultado
                 usada = "renglones"
             elif estrategia == "renglones":
                 raise ErrorParser(
@@ -637,4 +666,5 @@ def leer_pdf(contenido: bytes, mapeo: dict[str, Any]) -> ExportLeido:
         referencia_externa=metadatos.get("referencia_externa", ""),
         filas=filas,
         advertencias=advertencias,
+        iva=iva,
     )
