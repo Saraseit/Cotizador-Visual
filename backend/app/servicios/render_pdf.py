@@ -19,7 +19,8 @@ from typing import Any
 from fastapi import HTTPException, status
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from app.db.modelos import CotizacionDetalle
+from app.db.modelos import ConfigPresentacion, CotizacionDetalle, descripcion_impresa
+from app.servicios import idiomas
 
 DIR_PLANTILLAS = Path(__file__).resolve().parent.parent / "plantillas"
 PLANTILLA_PROPUESTA = "propuesta_base.html"
@@ -92,44 +93,67 @@ def agrupar_en_secciones(items: list[ItemRender], categorias: list[str]) -> list
     return secciones
 
 
-def construir_contexto(detalle: CotizacionDetalle, data_uris: dict[str, str]) -> dict[str, Any]:
+def construir_contexto(
+    detalle: CotizacionDetalle, data_uris: dict[str, str], config: ConfigPresentacion | None = None
+) -> dict[str, Any]:
     """`data_uris` va indexado por id de imagen (str).
 
     Las partidas de flete y montaje no se imprimen como renglón: se suman en el bloque de totales.
+    `config` es la de la presentación de esta cotización: de ahí salen la moneda y el idioma, para que
+    los dos PDF del cliente salgan iguales.
     """
+    dinero = idiomas.Dinero(config.moneda, config.tipo_cambio) if config else idiomas.Dinero()
+    traducir = idiomas.Traductor(config.idioma, dict(config.traducciones)) if config else idiomas.Traductor()
+    t = idiomas.etiquetas_de(config.idioma if config else "es")
     partidas = [i for i in detalle.items if not i.cargo]
     items = [
         ItemRender(
             codigo=item.codigo_origen,
-            descripcion=item.descripcion_origen,
+            descripcion=(
+                descripcion_impresa(item)
+                if (item.descripcion_editada or "").strip()
+                else traducir(item.descripcion_origen)
+            ),
             cantidad=formatear_cantidad(item.cantidad),
-            precio_unitario=formatear_moneda(item.precio_unitario),
-            importe=formatear_moneda(item.importe),
+            precio_unitario=dinero(item.precio_unitario),
+            importe=dinero(item.importe),
             imagen_data_uri=data_uris.get(str(item.imagen_id)) if item.imagen_id else None,
             es_render_conceptual=item.es_render_conceptual,
             es_ad_hoc=item.tipo_item == "ad_hoc",
         )
         for item in partidas
     ]
-    totales: list[tuple[str, str]] = [("Subtotal", formatear_moneda(detalle.subtotal))]
+    totales: list[tuple[str, str]] = [(t["subtotal_mobiliario"], dinero(detalle.subtotal))]
     if any(i.cargo == "flete" for i in detalle.items):
-        totales.append(("Flete", formatear_moneda(detalle.flete)))
+        totales.append((t["flete"], dinero(detalle.flete)))
     if any(i.cargo == "montaje" for i in detalle.items):
-        totales.append(("Montaje", formatear_moneda(detalle.montaje)))
+        totales.append((t["montaje"], dinero(detalle.montaje)))
     if detalle.iva is not None:
-        totales.append(("IVA", formatear_moneda(detalle.iva)))
+        totales.append((t["iva"], dinero(detalle.iva)))
+    ahora = datetime.now()
+    fecha = ahora.strftime("%d/%m/%Y") if not config or config.idioma == "es" else ahora.strftime("%m/%d/%Y")
     return {
+        "t": t,
+        "idioma": config.idioma if config else "es",
+        "nota_moneda": _nota_moneda(config, t, fecha),
         "nombre_cliente": detalle.nombre_cliente,
         "referencia_externa": detalle.referencia_externa,
-        "fecha": datetime.now().strftime("%d/%m/%Y"),
+        "fecha": fecha,
         "items": items,
-        "secciones": agrupar_en_secciones(items, [i.categoria for i in partidas]),
+        "secciones": agrupar_en_secciones(items, [traducir(i.categoria) for i in partidas]),
         "totales": totales,
-        "total": formatear_moneda(detalle.total),
+        "total": dinero(detalle.total),
         "mas_iva": detalle.iva is None,
         "hay_render_conceptual": any(i.es_render_conceptual for i in items),
         "total_items": len(items),
     }
+
+
+def _nota_moneda(config: ConfigPresentacion | None, t: dict[str, str], fecha: str) -> str:
+    """Renglón al pie con la moneda de los importes (y el tipo de cambio si van en dólares)."""
+    if config and config.moneda == "USD" and config.tipo_cambio:
+        return t["precios_en_dolares"].format(tipo_cambio=f"{config.tipo_cambio:,.2f}", fecha=fecha)
+    return t["precios_en_pesos"]
 
 
 def renderizar_html(contexto: dict[str, Any]) -> str:
@@ -165,7 +189,9 @@ def html_a_pdf(html: str) -> bytes:
     return HTML(string=html, base_url=str(DIR_PLANTILLAS)).write_pdf()
 
 
-async def generar_pdf_cotizacion(detalle: CotizacionDetalle, storage: Any) -> bytes:
+async def generar_pdf_cotizacion(
+    detalle: CotizacionDetalle, storage: Any, config: ConfigPresentacion | None = None
+) -> bytes:
     imagenes = {str(i.imagen.id): i.imagen.ruta_storage for i in detalle.items if i.imagen and not i.cargo}
 
     async def descargar(imagen_id: str, ruta: str) -> tuple[str, str | None]:
@@ -178,5 +204,5 @@ async def generar_pdf_cotizacion(detalle: CotizacionDetalle, storage: Any) -> by
     resultados = await asyncio.gather(*(descargar(i, r) for i, r in imagenes.items()))
     data_uris = {imagen_id: uri for imagen_id, uri in resultados if uri}
 
-    html = renderizar_html(construir_contexto(detalle, data_uris))
+    html = renderizar_html(construir_contexto(detalle, data_uris, config))
     return await asyncio.to_thread(html_a_pdf, html)

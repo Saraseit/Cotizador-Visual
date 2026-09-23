@@ -58,7 +58,7 @@ def main() -> int:
     detalle = _detalle()
     config = pres.config_por_defecto(detalle)
     for tipografia in ("everett", "bebas"):  # 'everett' cae a Public Sans si no están sus archivos
-        config.tipografia_titulos = tipografia
+        config.parametros.tipografia_titulos = tipografia
         vistas = pres.secciones_vista(config, detalle)
         contexto = pres.construir_contexto(detalle, config, vistas, {}, set(), {})
         editorial = html_a_pdf(pres.renderizar_html(contexto))

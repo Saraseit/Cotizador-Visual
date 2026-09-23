@@ -30,7 +30,12 @@ export function SelectorImagen({ item, cotizacionId, alCerrar }: Props) {
   }
 
   return (
-    <Modal abierto titulo="Elegir imagen" subtitulo={`${item.codigo_origen || 'Sin código'} · ${item.descripcion_origen}`} alCerrar={alCerrar}>
+    <Modal
+      abierto
+      titulo="Elegir imagen"
+      subtitulo={`${item.codigo_origen || 'Sin código'} · ${item.descripcion_origen}`}
+      alCerrar={alCerrar}
+    >
       <div className="mb-5 flex gap-1 border-b border-borde" role="tablist">
         {(
           [
@@ -72,13 +77,26 @@ export function SelectorImagen({ item, cotizacionId, alCerrar }: Props) {
 // Subir
 // ---------------------------------------------------------------------------
 
-function BotonSubir({ item, alSubida, etiqueta = 'Subir imagen nueva' }: { item: CotizacionItem; alSubida: (imagen: Imagen) => void; etiqueta?: string }) {
+function BotonSubir({
+  item,
+  alSubida,
+  etiqueta = 'Subir imagen nueva',
+}: {
+  item: CotizacionItem
+  alSubida: (imagen: Imagen) => void
+  etiqueta?: string
+}) {
   const entrada = useRef<HTMLInputElement>(null)
   const subir = useSubirImagen()
 
   return (
     <>
-      <Boton variante="secundario" icono={<Upload className="h-4 w-4" />} cargando={subir.isPending} onClick={() => entrada.current?.click()}>
+      <Boton
+        variante="secundario"
+        icono={<Upload className="h-4 w-4" />}
+        cargando={subir.isPending}
+        onClick={() => entrada.current?.click()}
+      >
         {etiqueta}
       </Boton>
       <input
@@ -135,8 +153,8 @@ function PestanaBiblioteca({
     return (
       <div className="flex flex-col gap-4">
         <Aviso tono="info">
-          Este ítem no está en el catálogo, así que no tiene biblioteca. Sube una foto para usarla en esta propuesta; después
-          puedes generar variantes con IA a partir de ella en la otra pestaña.
+          Este ítem no está en el catálogo, así que no tiene biblioteca. Sube una foto para usarla en esta propuesta; después puedes generar
+          variantes con IA a partir de ella en la otra pestaña.
         </Aviso>
         {item.imagen && (
           <div className="flex items-center gap-4">
@@ -174,9 +192,7 @@ function PestanaBiblioteca({
 
       {imagenes.isLoading && <p className="text-sm text-texto-secundario">Cargando biblioteca…</p>}
       {imagenes.isError && <Aviso tono="error">{mensajeDeError(imagenes.error)}</Aviso>}
-      {imagenes.data?.length === 0 && (
-        <Aviso tono="ambar">Este ítem todavía no tiene imágenes en la biblioteca. Sube la primera.</Aviso>
-      )}
+      {imagenes.data?.length === 0 && <Aviso tono="ambar">Este ítem todavía no tiene imágenes en la biblioteca. Sube la primera.</Aviso>}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
         {visibles.map((imagen) => {

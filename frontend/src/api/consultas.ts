@@ -6,6 +6,8 @@ import type {
   CatalogoItemActualizacion,
   ConfigPresentacionEntrada,
   CotizacionDetalle,
+  PaletaEntrada,
+  ParametrosPlantilla,
   Presentacion,
   UsuarioActualizacion,
 } from './tipos'
@@ -25,6 +27,8 @@ export const llaves = {
   pdfsCotizacion: (id: string) => ['cotizaciones', id, 'pdfs'] as const,
   presentacion: (id: string) => ['cotizaciones', id, 'presentacion'] as const,
   ambientacion: ['imagenes', 'ambientacion'] as const,
+  plantillas: ['plantillas'] as const,
+  paletas: ['paletas'] as const,
   resumenBiblioteca: ['biblioteca', 'resumen'] as const,
   usuarios: ['usuarios'] as const,
 }
@@ -198,6 +202,88 @@ export function useGenerarMontaje(cotizacionId: string) {
       void cliente.invalidateQueries({ queryKey: llaves.resumenBiblioteca })
     },
   })
+}
+
+export function useTraducirPresentacion(cotizacionId: string) {
+  return useMutacionPresentacion(cotizacionId, () => api.presentacion.traducir(cotizacionId))
+}
+
+/** Nota de la partida para esta cotización. No toca el catálogo ni el sistema de la empresa. */
+export function useEditarDescripcion(cotizacionId: string) {
+  const cliente = useQueryClient()
+  return useMutation({
+    mutationFn: ({ itemId, descripcion }: { itemId: string; descripcion: string }) =>
+      api.cotizaciones.editarDescripcion(cotizacionId, itemId, descripcion),
+    onSuccess: (detalle: CotizacionDetalle) => cliente.setQueryData(llaves.cotizacion(cotizacionId), detalle),
+  })
+}
+
+// --- Plantillas y paletas ---------------------------------------------------
+
+export function usePlantillas(habilitado = true) {
+  return useQuery({
+    queryKey: llaves.plantillas,
+    queryFn: api.plantillas.listar,
+    enabled: habilitado,
+    staleTime: VIDA_URLS_MS,
+  })
+}
+
+function useMutacionPlantillas<T>(fn: (valor: T) => Promise<unknown>) {
+  const cliente = useQueryClient()
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: () => void cliente.invalidateQueries({ queryKey: llaves.plantillas }),
+  })
+}
+
+export function useCrearPlantilla() {
+  return useMutacionPlantillas(({ archivo, nombre }: { archivo: File; nombre?: string }) => api.plantillas.crear(archivo, nombre ?? ''))
+}
+
+export function useActualizarPlantilla() {
+  return useMutacionPlantillas(
+    ({ id, cambios }: { id: string; cambios: { nombre?: string; descripcion?: string; parametros?: ParametrosPlantilla } }) =>
+      api.plantillas.actualizar(id, cambios),
+  )
+}
+
+export function useAgregarInspiracion() {
+  return useMutacionPlantillas(({ id, archivo }: { id: string; archivo: File }) => api.plantillas.agregarInspiracion(id, archivo))
+}
+
+export function useQuitarInspiracion() {
+  return useMutacionPlantillas(({ id, imagenId }: { id: string; imagenId: string }) => api.plantillas.quitarInspiracion(id, imagenId))
+}
+
+export function useAnalizarPlantilla() {
+  return useMutacionPlantillas((id: string) => api.plantillas.analizar(id))
+}
+
+export function useEliminarPlantilla() {
+  return useMutacionPlantillas((id: string) => api.plantillas.eliminar(id))
+}
+
+export function usePaletas(habilitado = true) {
+  return useQuery({ queryKey: llaves.paletas, queryFn: api.paletas.listar, enabled: habilitado, staleTime: 10 * 60 * 1000 })
+}
+
+function useMutacionPaletas<T>(fn: (valor: T) => Promise<unknown>) {
+  const cliente = useQueryClient()
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: () => void cliente.invalidateQueries({ queryKey: llaves.paletas }),
+  })
+}
+
+export function useGuardarPaleta() {
+  return useMutacionPaletas(({ id, entrada }: { id?: string | null; entrada: PaletaEntrada }) =>
+    id ? api.paletas.actualizar(id, entrada) : api.paletas.crear(entrada),
+  )
+}
+
+export function useEliminarPaleta() {
+  return useMutacionPaletas((id: string) => api.paletas.eliminar(id))
 }
 
 export function useGenerarPdfPresentacion(cotizacionId: string) {

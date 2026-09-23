@@ -47,6 +47,9 @@ class Configuracion(BaseSettings):
     openai_api_key: str | None = None
     openai_modelo_imagenes: str = "gpt-image-2.5-sunburst"
     openai_calidad_imagenes: str = "medium"
+    # Modelo de texto/visión (leer inspiraciones y traducir). Vacío: se elige solo preguntándole a la
+    # cuenta qué modelos tiene, para no depender del nombre del modelo del año en curso.
+    openai_modelo_texto: str = ""
     variantes_por_generacion: int = 4
     prompt_estilo_fijo: str = PROMPT_ESTILO_POR_DEFECTO
     # Topes de llamadas al proveedor en una ventana de 24 h (cada llamada cuenta 1, produzca las imágenes que produzca).

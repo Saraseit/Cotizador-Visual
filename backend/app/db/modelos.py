@@ -8,10 +8,10 @@ from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 Rol = Literal["vendedor", "admin"]
-TipoImagen = Literal["oficial", "variante", "generada", "ambientacion", "montaje"]
+TipoImagen = Literal["oficial", "variante", "generada", "ambientacion", "montaje", "inspiracion"]
 TipoItem = Literal["catalogo", "ad_hoc"]
 EstadoCotizacion = Literal["revision", "generada"]
 EstadoItem = Literal["falta_imagen", "sugerida", "variante", "render_conceptual"]
@@ -184,6 +184,9 @@ class CotizacionItem(BaseModel):
     # Sección del PDF del sistema ('' si no tiene) y, si no es mobiliario, el tipo de cargo.
     categoria: str = ""
     cargo: Cargo | None = None
+    # Texto que el vendedor ajustó en Revisar para esta cotización; vacío = se usa el del sistema.
+    # Si está lleno se imprime tal cual y no se manda a traducir: es una corrección deliberada.
+    descripcion_editada: str = ""
     # Campos calculados
     imagen: Imagen | None = None
     item: CatalogoItem | None = None
@@ -232,6 +235,12 @@ class AsignarImagen(BaseModel):
     """Cuerpo de PATCH /cotizaciones/{id}/items/{item_id}. `null` quita la imagen."""
 
     imagen_id: UUID | None = None
+
+
+class EditarDescripcion(BaseModel):
+    """Texto de la partida para esta cotización. Vacío vuelve al del sistema."""
+
+    descripcion: str = Field("", max_length=600)
 
 
 class ResultadoPdf(BaseModel):
@@ -294,24 +303,100 @@ class SeccionPresentacion(BaseModel):
     incluir: bool = True
 
 
+# --- Plantillas (el diseño general de la presentación) -----------------------
+
+Composicion = Literal["editorial", "revista", "catalogo"]
+TipografiaTitulos = Literal["everett", "bebas"]
+PiezasPorPagina = Literal[1, 2, 4, 6]
+
+
+class ParametrosPlantilla(BaseModel):
+    """Cómo se ve la presentación.
+
+    Nacen de una inspiración (la IA los propone mirando la imagen) y el vendedor los ajusta.
+    Son pocos y acotados a propósito: el diseño cambia de verdad entre plantillas, pero siempre
+    dentro de lo que la marca acepta.
+    """
+
+    composicion: Composicion = "editorial"
+    tipografia_titulos: TipografiaTitulos = "everett"
+    paleta: Paleta = Field(default_factory=Paleta)
+    # 1.0 = como la presentación de ejemplo; abajo, títulos discretos; arriba, títulos enormes.
+    escala_titulos: float = Field(1.0, ge=0.5, le=1.4)
+    fotos_a_sangre: bool = True
+    piezas_por_pagina: PiezasPorPagina = 2
+    mostrar_manifiesto: bool = True
+    mostrar_cierre: bool = True
+
+
+class Plantilla(BaseModel):
+    id: UUID
+    nombre: str
+    descripcion: str = ""
+    parametros: ParametrosPlantilla = Field(default_factory=ParametrosPlantilla)
+    inspiraciones: list[Imagen] = Field(default_factory=list)
+    creado_en: datetime | None = None
+
+
+class PlantillaActualizacion(BaseModel):
+    nombre: str | None = Field(None, min_length=1, max_length=60)
+    descripcion: str | None = Field(None, max_length=300)
+    parametros: ParametrosPlantilla | None = None
+
+
+class PaletaGuardada(BaseModel):
+    """Paleta para elegir en el editor. Sin `id` es una de las predefinidas del código."""
+
+    id: UUID | None = None
+    nombre: str
+    paleta: Paleta
+    predefinida: bool = False
+
+
+class PaletaEntrada(BaseModel):
+    nombre: str = Field(min_length=1, max_length=40)
+    paleta: Paleta
+
+
+# --- Configuración de la presentación de una cotización ---------------------
+
+Moneda = Literal["MXN", "USD"]
+Idioma = Literal["es", "en"]
+
+
 class ConfigPresentacionEntrada(BaseModel):
     """Cuerpo de PUT /cotizaciones/{id}/presentacion. Las imágenes se asignan aparte, por hueco."""
 
     brief: str = Field("", max_length=2000)
     titulo: str = Field("PROPUESTA DE MOBILIARIO", max_length=40)
     evento: str = Field("", max_length=80)
-    tipografia_titulos: Literal["everett", "bebas"] = "everett"
-    paleta: Paleta = Field(default_factory=Paleta)
+    # Aplicar una plantilla copia sus parámetros aquí; `plantilla_id` sólo recuerda de cuál salieron
+    # (sus inspiraciones guían a la IA al generar montajes).
+    plantilla_id: UUID | None = None
+    parametros: ParametrosPlantilla = Field(default_factory=ParametrosPlantilla)
     mostrar_precios: bool = True
+    # 'USD' convierte todos los importes con `tipo_cambio` (pesos por dólar) y lo dice al pie.
+    moneda: Moneda = "MXN"
+    tipo_cambio: float | None = Field(None, gt=0, le=1000)
+    idioma: Idioma = "es"
     manifiesto: list[str] = Field(default_factory=lambda: list(MANIFIESTO_POR_DEFECTO), max_length=3)
     cierre: list[str] = Field(default_factory=lambda: list(CIERRE_POR_DEFECTO), max_length=3)
     secciones: list[SeccionPresentacion] = Field(default_factory=list, max_length=60)
 
 
+    @model_validator(mode="after")
+    def _tipo_cambio_si_dolares(self) -> "ConfigPresentacionEntrada":
+        if self.moneda == "USD" and not self.tipo_cambio:
+            raise ValueError("Para presentar en dólares hace falta el tipo de cambio (pesos por dólar).")
+        return self
+
+
 class ConfigPresentacion(ConfigPresentacionEntrada):
-    """Lo que se guarda en `presentaciones.config`: la entrada más la imagen de cada hueco."""
+    """Lo que se guarda en `presentaciones.config`: la entrada, la imagen de cada hueco y la caché
+    de traducciones (texto en español -> texto traducido), para no pagar la traducción dos veces."""
 
     imagenes: dict[str, UUID] = Field(default_factory=dict)
+    traducciones: dict[str, str] = Field(default_factory=dict)
 
 
 class SeccionVista(SeccionPresentacion):
@@ -364,6 +449,11 @@ class ResumenBiblioteca(BaseModel):
     total_generaciones_24h: int = 0
     total_sin_imagen: int = 0
     items_sin_imagen: list[ItemSinImagen] = Field(default_factory=list)
+
+
+def descripcion_impresa(item: "CotizacionItem") -> str:
+    """La descripción que va al PDF: la que ajustó el vendedor o, si no, la del sistema."""
+    return (item.descripcion_editada or "").strip() or item.descripcion_origen
 
 
 def calcular_estado_item(imagen: dict[str, Any] | Imagen | None) -> EstadoItem:

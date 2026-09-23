@@ -28,6 +28,7 @@ from app.routers.catalogo import con_urls
 from app.routers.cotizaciones import _fila_cotizacion, _puede_editar, cargar_detalle, registrar_pdf
 from app.routers.imagenes import _verificar_tope_generaciones
 from app.servicios import presentacion as servicio
+from app.servicios.ia_texto import ErrorIaTexto, traducir
 from app.servicios.proveedor_imagenes import ErrorProveedorImagenes, obtener_proveedor
 from app.servicios.storage import StorageDep
 
@@ -87,6 +88,38 @@ async def _guardar_config(db: Any, cotizacion_id: UUID, config: ConfigPresentaci
     ).execute()
 
 
+async def asegurar_traducciones(
+    db: Any,
+    cotizacion_id: UUID,
+    detalle: CotizacionDetalle,
+    config: ConfigPresentacion,
+    config_app: Configuracion,
+    usuario: Any,
+    obligatoria: bool = False,
+) -> ConfigPresentacion:
+    """Traduce con IA lo que falte y lo guarda en la caché de la presentación.
+
+    Se paga una sola vez por texto. Si la IA falla y la traducción no era obligatoria, el PDF sale
+    con el glosario en vez de quedarse en español a medias.
+    """
+    if config.idioma == "es":
+        return config
+    vistas = servicio.secciones_vista(config, detalle)
+    faltantes = [t for t in servicio.textos_traducibles(detalle, config, vistas) if t not in config.traducciones]
+    if not faltantes:
+        return config
+    try:
+        nuevas = await traducir(faltantes, config.idioma, config_app)
+    except ErrorIaTexto as error:
+        if obligatoria:
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(error)) from error
+        registro.warning("Sin traducción con IA (%s): el PDF sale con el glosario.", error)
+        return config
+    config.traducciones.update(nuevas)
+    await _guardar_config(db, cotizacion_id, config, usuario)
+    return config
+
+
 def _validar_hueco(hueco: str, vistas: list[SeccionVista]) -> None:
     if hueco in HUECOS_AMBIENTACION:
         return
@@ -135,13 +168,17 @@ async def guardar_presentacion(
     cotizacion = await _fila_cotizacion(db, cotizacion_id, "*")
     _puede_editar(cotizacion, usuario)
     fila = await _fila_presentacion(db, cotizacion_id)
-    # Del guardado anterior sólo se conservan los huecos de imagen; el resto lo manda el cuerpo.
+    # Del guardado anterior se conservan las imágenes de cada hueco y las traducciones ya pagadas;
+    # el resto lo manda el cuerpo.
+    huecos: dict[str, UUID] = {}
+    traducciones: dict[str, str] = {}
     try:
-        huecos = ConfigPresentacion.model_validate((fila or {}).get("config") or {}).imagenes
+        anterior = ConfigPresentacion.model_validate(servicio.migrar_config((fila or {}).get("config") or {}))
+        huecos, traducciones = anterior.imagenes, anterior.traducciones
     except ValidationError:
         registro.warning("La config guardada de %s no es válida: se guarda sin imágenes.", cotizacion_id)
-        huecos = {}
-    await _guardar_config(db, cotizacion_id, ConfigPresentacion(**cuerpo.model_dump(), imagenes=huecos), usuario)
+    nueva = ConfigPresentacion(**cuerpo.model_dump(), imagenes=huecos, traducciones=traducciones)
+    await _guardar_config(db, cotizacion_id, nueva, usuario)
     presentacion, _, _ = await _armar(db, storage, cotizacion_id)
     return presentacion
 
@@ -204,8 +241,10 @@ async def generar_montaje(
         if item.imagen and item.imagen.ruta_storage not in rutas:
             rutas.append(item.imagen.ruta_storage)
     referencias = [await storage.descargar(storage.bucket_imagenes, r) for r in rutas[: servicio.REFERENCIAS_MAXIMAS]]
+    inspiraciones = await _inspiraciones(db, storage, presentacion.config.plantilla_id)
+    referencias += inspiraciones
 
-    prompt = servicio.prompt_montaje(presentacion.config, vista, items, cuerpo.indicaciones)
+    prompt = servicio.prompt_montaje(presentacion.config, vista, items, cuerpo.indicaciones, len(inspiraciones))
     try:
         imagen_generada = await proveedor.generar_escena(referencias, prompt)
     except ErrorProveedorImagenes as error:
@@ -260,16 +299,55 @@ async def generar_montaje(
     return actualizada
 
 
+async def _inspiraciones(db: Any, storage: Any, plantilla_id: UUID | None) -> list[bytes]:
+    """Imágenes de la plantilla aplicada; se mandan al final para que la IA copie de ellas la atmósfera."""
+    if plantilla_id is None:
+        return []
+    fila = (await db.table("plantillas").select("config").eq("id", str(plantilla_id)).limit(1).execute()).data
+    ids = ((fila[0].get("config") if fila else None) or {}).get("inspiraciones") or []
+    if not ids:
+        return []
+    imagenes = (
+        await db.table("imagenes").select("ruta_storage").in_("id", ids[: servicio.INSPIRACIONES_MAXIMAS]).execute()
+    ).data or []
+    descargadas: list[bytes] = []
+    for imagen in imagenes:
+        try:
+            descargadas.append(await storage.descargar(storage.bucket_imagenes, imagen["ruta_storage"]))
+        except HTTPException as error:
+            registro.warning("No se pudo leer la inspiración %s: %s", imagen["ruta_storage"], error.detail)
+    return descargadas
+
+
+@router.post("/{cotizacion_id}/presentacion/traducir", response_model=Presentacion)
+async def traducir_presentacion(
+    cotizacion_id: UUID, usuario: Usuario, db: ClienteDB, storage: StorageDep, config_app: Config
+) -> Presentacion:
+    """Traduce con IA los textos de la cotización al idioma elegido y guarda el resultado.
+
+    Lo que el vendedor ya ajustó a mano en Revisar no se toca.
+    """
+    cotizacion = await _fila_cotizacion(db, cotizacion_id, "*")
+    _puede_editar(cotizacion, usuario)
+    presentacion, detalle, _ = await _armar(db, storage, cotizacion_id)
+    if presentacion.config.idioma == "es":
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "La presentación ya está en español.")
+    await asegurar_traducciones(db, cotizacion_id, detalle, presentacion.config, config_app, usuario, obligatoria=True)
+    actualizada, _, _ = await _armar(db, storage, cotizacion_id)
+    return actualizada
+
+
 @router.post("/{cotizacion_id}/presentacion/pdf", response_model=ResultadoPdf)
 async def generar_pdf_presentacion(
-    cotizacion_id: UUID, usuario: Usuario, db: ClienteDB, storage: StorageDep
+    cotizacion_id: UUID, usuario: Usuario, db: ClienteDB, storage: StorageDep, config_app: Config
 ) -> ResultadoPdf:
     """Renderiza la presentación editorial, la guarda en Storage y devuelve una URL firmada."""
     cotizacion = await _fila_cotizacion(db, cotizacion_id, "*")
     _puede_editar(cotizacion, usuario)
     presentacion, detalle, crudas = await _armar(db, storage, cotizacion_id)
+    config = await asegurar_traducciones(db, cotizacion_id, detalle, presentacion.config, config_app, usuario)
 
-    pdf = await servicio.generar_pdf(detalle, presentacion.config, presentacion.secciones, crudas, storage)
+    pdf = await servicio.generar_pdf(detalle, config, presentacion.secciones, crudas, storage)
 
     marca = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     ruta = f"cotizaciones/{cotizacion_id}/presentaciones/presentacion-{marca}.pdf"

@@ -1,7 +1,7 @@
 // Tipos que espejan los esquemas Pydantic del backend (backend/app/db/modelos.py).
 
 export type Rol = 'vendedor' | 'admin'
-export type TipoImagen = 'oficial' | 'variante' | 'generada' | 'ambientacion' | 'montaje'
+export type TipoImagen = 'oficial' | 'variante' | 'generada' | 'ambientacion' | 'montaje' | 'inspiracion'
 export type TipografiaTitulos = 'everett' | 'bebas'
 export type TipoItem = 'catalogo' | 'ad_hoc'
 export type EstadoCotizacion = 'revision' | 'generada'
@@ -143,6 +143,8 @@ export interface CotizacionItem {
   categoria: string
   /** Si no es mobiliario: flete o montaje (se suman abajo, no se imprimen como partida). */
   cargo: Cargo | null
+  /** Texto ajustado para esta cotización; vacío = se usa el del sistema. */
+  descripcion_editada: string
   imagen: Imagen | null
   item: CatalogoItem | null
   estado: EstadoItem
@@ -176,6 +178,11 @@ export interface CotizacionDetalle extends CotizacionResumen {
 
 // --- Presentación editorial --------------------------------------------------
 
+export type Composicion = 'editorial' | 'revista' | 'catalogo'
+export type Moneda = 'MXN' | 'USD'
+export type Idioma = 'es' | 'en'
+export type PiezasPorPagina = 1 | 2 | 4 | 6
+
 /** Colores de la presentación. Los de marca (logo, menta) no se configuran. */
 export interface Paleta {
   fondo: string
@@ -191,13 +198,53 @@ export interface SeccionPresentacion {
   incluir: boolean
 }
 
+/** Cómo se ve la presentación. Salen de la inspiración y el vendedor los ajusta. */
+export interface ParametrosPlantilla {
+  composicion: Composicion
+  tipografia_titulos: TipografiaTitulos
+  paleta: Paleta
+  /** 1.0 = un título que llena el ancho; menos, títulos discretos. */
+  escala_titulos: number
+  fotos_a_sangre: boolean
+  piezas_por_pagina: PiezasPorPagina
+  mostrar_manifiesto: boolean
+  mostrar_cierre: boolean
+}
+
+export interface Plantilla {
+  id: string
+  nombre: string
+  descripcion: string
+  parametros: ParametrosPlantilla
+  inspiraciones: Imagen[]
+  creado_en: string | null
+}
+
+export interface PaletaGuardada {
+  /** Sin id es una de las que trae la app. */
+  id: string | null
+  nombre: string
+  paleta: Paleta
+  predefinida: boolean
+}
+
+export interface PaletaEntrada {
+  nombre: string
+  paleta: Paleta
+}
+
 export interface ConfigPresentacionEntrada {
   brief: string
   titulo: string
   evento: string
-  tipografia_titulos: TipografiaTitulos
-  paleta: Paleta
+  /** De qué plantilla salieron los parámetros (sus inspiraciones guían a la IA en los montajes). */
+  plantilla_id: string | null
+  parametros: ParametrosPlantilla
   mostrar_precios: boolean
+  moneda: Moneda
+  /** Pesos por dólar. Obligatorio si la moneda es USD. */
+  tipo_cambio: number | null
+  idioma: Idioma
   manifiesto: string[]
   cierre: string[]
   secciones: SeccionPresentacion[]
@@ -206,6 +253,8 @@ export interface ConfigPresentacionEntrada {
 export interface ConfigPresentacion extends ConfigPresentacionEntrada {
   /** hueco ('portada', 'manifiesto', 'cierre', 'montaje:<clave>') -> id de imagen */
   imagenes: Record<string, string>
+  /** Traducciones ya pagadas: texto en español -> texto traducido. */
+  traducciones: Record<string, string>
 }
 
 export interface SeccionVista extends SeccionPresentacion {

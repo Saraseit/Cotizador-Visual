@@ -86,7 +86,7 @@ def test_propuesta_agrupa_por_seccion_y_muestra_cargos_abajo():
         ("SILLAS", ["SILLA TIFFANY", "SILLA CROSSBACK"]),
         ("MESA BANQUETE", ["MESA REDONDA"]),
     ]
-    assert contexto["totales"] == [("Subtotal", "$3,500.00"), ("Flete", "$500.00"), ("Montaje", "$400.00"), ("IVA", "$704.00")]
+    assert contexto["totales"] == [("Subtotal mobiliario", "$3,500.00"), ("Flete", "$500.00"), ("Montaje", "$400.00"), ("IVA", "$704.00")]
     html = renderizar_html(contexto)
     assert "FLETE IDA" not in html and "FLETE REGRESO" not in html  # no se imprimen como renglón
     assert html.index("SILLAS") < html.index("SILLA TIFFANY") < html.index("MESA BANQUETE") < html.index("MESA REDONDA")
@@ -96,7 +96,7 @@ def test_propuesta_agrupa_por_seccion_y_muestra_cargos_abajo():
 def test_propuesta_sin_cargos_ni_iva():
     items = [i for i in _items() if not i.cargo]
     contexto = construir_contexto(_detalle(items, None), {})
-    assert contexto["totales"] == [("Subtotal", "$3,500.00")]  # sin renglones de Flete/Montaje/IVA
+    assert contexto["totales"] == [("Subtotal mobiliario", "$3,500.00")]  # sin renglones de Flete/Montaje/IVA
     assert "(más IVA)" in renderizar_html(contexto)
 
 

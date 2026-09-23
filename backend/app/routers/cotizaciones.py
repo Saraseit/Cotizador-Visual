@@ -18,11 +18,13 @@ from app.db.modelos import (
     CotizacionDetalle,
     CotizacionItem,
     CotizacionResumen,
+    EditarDescripcion,
     PdfGenerado,
     Reordenar,
     ResultadoPdf,
     calcular_estado_item,
 )
+from app.servicios import presentacion as servicio_presentacion
 from app.servicios import render_pdf
 from app.servicios.cargos import clasificar_cargo
 from app.servicios.fotos_pdf import extraer_fotos_partidas, guardar_en_biblioteca
@@ -122,6 +124,16 @@ def calcular_totales(items: list[CotizacionItem], iva_documento: Any) -> dict[st
 
 async def cargar_detalle(db: Any, storage: Any, cotizacion_id: UUID) -> CotizacionDetalle:
     return await _armar_detalle(await _fila_cotizacion(db, cotizacion_id), storage)
+
+
+async def config_de_presentacion(db: Any, cotizacion_id: UUID, detalle: CotizacionDetalle) -> Any:
+    """Config de la presentación de esta cotización (o la de por defecto).
+
+    El PDF base la lee para salir en la misma moneda e idioma que la presentación editorial.
+    """
+    respuesta = await db.table("presentaciones").select("config").eq("cotizacion_id", str(cotizacion_id)).limit(1).execute()
+    crudo = respuesta.data[0]["config"] if respuesta.data else None
+    return servicio_presentacion.leer_config(crudo, detalle)
 
 
 async def registrar_pdf(db: Any, cotizacion_id: UUID, tipo: str, ruta: str, usuario_id: UUID) -> None:
@@ -339,8 +351,9 @@ async def generar_propuesta(
     fila = await _fila_cotizacion(db, cotizacion_id)
     _puede_editar(fila, usuario)
     detalle = await _armar_detalle(fila, storage)
+    config = await config_de_presentacion(db, cotizacion_id, detalle)
 
-    pdf = await render_pdf.generar_pdf_cotizacion(detalle, storage)
+    pdf = await render_pdf.generar_pdf_cotizacion(detalle, storage, config)
 
     marca = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     ruta = f"cotizaciones/{cotizacion_id}/propuestas/propuesta-{marca}.pdf"
@@ -365,6 +378,34 @@ async def reordenar_partidas(
     if ajenos:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Hay partidas que no pertenecen a esta cotización.")
     await db.rpc("reordenar_cotizacion", {"p_cotizacion": str(cotizacion_id), "p_ids": [str(i) for i in cuerpo.ids]}).execute()
+    return await cargar_detalle(db, storage, cotizacion_id)
+
+
+@router.patch("/{cotizacion_id}/items/{item_id}/descripcion", response_model=CotizacionDetalle)
+async def editar_descripcion(
+    cotizacion_id: UUID,
+    item_id: UUID,
+    cuerpo: EditarDescripcion,
+    usuario: Usuario,
+    db: ClienteDB,
+    storage: StorageDep,
+) -> CotizacionDetalle:
+    """Ajusta el texto de una partida sólo para esta cotización (el catálogo y el sistema no cambian).
+
+    Vacío vuelve a la descripción del sistema. Lo que se escribe aquí se imprime tal cual: no se
+    traduce, porque es una corrección deliberada del vendedor.
+    """
+    cotizacion = await _fila_cotizacion(db, cotizacion_id, "*")
+    _puede_editar(cotizacion, usuario)
+    actualizado = (
+        await db.table("cotizacion_items")
+        .update({"descripcion_editada": cuerpo.descripcion.strip()})
+        .eq("id", str(item_id))
+        .eq("cotizacion_id", str(cotizacion_id))
+        .execute()
+    )
+    if not actualizado.data:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "El ítem no pertenece a esta cotización.")
     return await cargar_detalle(db, storage, cotizacion_id)
 
 

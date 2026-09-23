@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="{{ idioma }}">
 <head>
   <meta charset="utf-8">
   <title>Propuesta {{ referencia_externa }}</title>
@@ -9,13 +9,13 @@
       size: Letter;
       margin: 18mm 16mm 20mm 16mm;
       @bottom-left {
-        content: "Propuesta {{ referencia_externa }}";
+        content: "{{ t.propuesta }} {{ referencia_externa }}";
         font-family: "IBM Plex Sans", "DejaVu Sans", sans-serif;
         font-size: 8.5pt;
         color: #57534A;
       }
       @bottom-right {
-        content: "Página " counter(page) " de " counter(pages);
+        content: "{{ t.pagina }} " counter(page) " {{ t.de }} " counter(pages);
         font-family: "IBM Plex Sans", "DejaVu Sans", sans-serif;
         font-size: 8.5pt;
         color: #57534A;
@@ -150,24 +150,24 @@
 <body>
   <header class="encabezado">
     <div>
-      <h1>Propuesta de mobiliario</h1>
-      <div class="sub">Minimal 4.0 · Diseño, construcción y eventos</div>
+      <h1>{{ t.propuesta_de_mobiliario }}</h1>
+      <div class="sub">{{ t.lema_marca }}</div>
     </div>
     <div class="meta">
-      <div><strong>Cliente</strong> {{ nombre_cliente }}</div>
-      <div><strong>Referencia</strong> {{ referencia_externa or "—" }}</div>
-      <div><strong>Fecha</strong> {{ fecha }}</div>
+      <div><strong>{{ t.cliente }}</strong> {{ nombre_cliente }}</div>
+      <div><strong>{{ t.referencia }}</strong> {{ referencia_externa or "—" }}</div>
+      <div><strong>{{ t.fecha }}</strong> {{ fecha }}</div>
     </div>
   </header>
 
   <table class="items">
     <thead>
       <tr>
-        <th class="col-imagen">Imagen</th>
-        <th>Descripción</th>
-        <th class="col-cantidad">Cant.</th>
-        <th class="col-precio">P. unitario</th>
-        <th class="col-importe">Importe</th>
+        <th class="col-imagen">{{ t.imagen }}</th>
+        <th>{{ t.descripcion }}</th>
+        <th class="col-cantidad">{{ t.cantidad_corta }}</th>
+        <th class="col-precio">{{ t.precio_unitario }}</th>
+        <th class="col-importe">{{ t.importe }}</th>
       </tr>
     </thead>
     <tbody>
@@ -180,17 +180,17 @@
         <td class="col-imagen">
           {% if item.imagen_data_uri %}
           <div class="miniatura">
-            {% if item.es_render_conceptual %}<span class="etiqueta-conceptual">Render conceptual</span>{% endif %}
+            {% if item.es_render_conceptual %}<span class="etiqueta-conceptual">{{ t.render_conceptual }}</span>{% endif %}
             <img src="{{ item.imagen_data_uri }}" alt="">
           </div>
           {% else %}
-          <div class="miniatura vacia">Sin imagen</div>
+          <div class="miniatura vacia">{{ t.sin_imagen }}</div>
           {% endif %}
         </td>
         <td>
           <div class="descripcion">{{ item.descripcion }}</div>
-          {% if item.codigo %}<div class="codigo">Código {{ item.codigo }}</div>{% endif %}
-          {% if item.es_render_conceptual %}<div class="nota-item">Imagen de referencia de acabado, sujeta a confirmación de producción.</div>{% endif %}
+          {% if item.codigo %}<div class="codigo">{{ t.codigo }} {{ item.codigo }}</div>{% endif %}
+          {% if item.es_render_conceptual %}<div class="nota-item">{{ t.nota_render_item }}</div>{% endif %}
         </td>
         <td class="col-cantidad">{{ item.cantidad }}</td>
         <td class="col-precio">{{ item.precio_unitario }}</td>
@@ -204,27 +204,24 @@
   <table class="totales">
     {% for etiqueta, valor in totales %}
     <tr class="parcial">
-      <td class="etiqueta">{{ etiqueta }}{% if loop.first %} ({{ total_items }} {{ "partida" if total_items == 1 else "partidas" }}){% endif %}</td>
+      <td class="etiqueta">{{ etiqueta }}{% if loop.first %} ({{ total_items }} {{ t.partida if total_items == 1 else t.partidas }}){% endif %}</td>
       <td class="monto">{{ valor }}</td>
     </tr>
     {% endfor %}
     <tr>
-      <td class="etiqueta">Total{% if mas_iva %} (más IVA){% endif %}</td>
+      <td class="etiqueta">{{ t.total }}{% if mas_iva %} {{ t.mas_iva }}{% endif %}</td>
       <td class="valor">{{ total }}</td>
     </tr>
   </table>
 
   {% if hay_render_conceptual %}
   <div class="leyenda">
-    <strong>Sobre los renders conceptuales.</strong> Las imágenes marcadas como "Render conceptual" son
-    una referencia visual del acabado solicitado, generada a partir de la fotografía de la pieza
-    original. El color, la textura y el resultado final están sujetos a confirmación de producción.
+    <strong>{{ t.leyenda_render_titulo }}</strong> {{ t.leyenda_render }}
   </div>
   {% endif %}
 
   <div class="pie">
-    Precios en pesos mexicanos. Esta propuesta es informativa y no sustituye la cotización formal
-    emitida por el sistema de la empresa.
+    {{ nota_moneda }} {{ t.pie_informativo }}
   </div>
 </body>
 </html>

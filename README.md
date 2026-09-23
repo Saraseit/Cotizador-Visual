@@ -44,7 +44,9 @@ Detalles, todas las variables, cómo actualizar y los ajustes manuales que no se
 3. El vendedor ajusta sólo lo que falta: elige otra imagen, sube una foto o genera un render conceptual con IA a partir de la foto oficial.
 4. Descarga el PDF para el cliente.
 
-Estado: **alfa desplegable**. La identidad de marca del PDF y el "Diseño con IA" (Fase 2) quedan para después.
+5. Si el cliente lo pide, arma la presentación editorial con la marca de Minimal 4.0, en la plantilla que elija y, si hace falta, en inglés y en dólares.
+
+Estado: **en uso con piloto**. El PDF base es neutro; la identidad de marca vive en la presentación editorial.
 
 ## Estructura
 
@@ -64,9 +66,11 @@ cotizador-visual/
 │   │   ├── config.py             # settings con valores por defecto sanos
 │   │   ├── auth.py               # validación del JWT de Supabase + perfil
 │   │   ├── db/                   # cliente de Supabase y esquemas Pydantic
-│   │   ├── routers/              # salud, perfil, cotizaciones, catalogo, imagenes, biblioteca, usuarios
-│   │   ├── servicios/            # parser_export, matching, catalogo_texto, render_pdf, proveedor_imagenes, storage
-│   │   └── plantillas/propuesta_base.html
+│   │   ├── marca/               # logotipo y monograma de Minimal 4.0 (PNG)
+│   │   ├── routers/              # salud, perfil, cotizaciones, presentaciones, plantillas, catalogo, imagenes, biblioteca, usuarios
+│   │   ├── servicios/            # parser_export, matching, cargos, fotos_pdf, render_pdf, presentacion, idiomas,
+│   │   │                         # ia_texto, proveedor_imagenes, catalogo_texto, storage
+│   │   └── plantillas/           # propuesta_base.html y presentacion_editorial.html
 │   ├── scripts/
 │   │   ├── arrancar.py           # primer arranque en un comando
 │   │   ├── importar_inventario.py  # catálogo desde el reporte de existencias del sistema
@@ -86,11 +90,13 @@ cotizador-visual/
 ├── frontend/                     # React 18 + Vite + TypeScript + Tailwind
 │   ├── vercel.json               # rewrite para React Router (Root Directory = frontend)
 │   └── src/
-│       ├── rutas/                # entrar, subir, revisar, generar, catalogo, biblioteca, usuarios, estado
+│       ├── rutas/                # entrar, subir, revisar, generar, presentacion, propuestas, catalogo,
+│       │                         # biblioteca, usuarios, estado
 │       ├── componentes/
 │       ├── api/                  # cliente HTTP tipado + hooks de TanStack Query
 │       └── lib/                  # supabase, sesión, formato
-└── supabase/migrations/          # 7 migraciones: esquema, RLS, buckets, catálogo, generaciones, linter
+└── supabase/migrations/          # 11 migraciones: esquema, RLS, buckets, catálogo, generaciones, linter,
+                                  # orden y cargos, presentaciones, historial de PDF, plantillas y paletas
 ```
 
 ## Correr en local
@@ -165,9 +171,13 @@ python scripts/cargar_catalogo.py --csv fixtures/catalogo_plantilla.csv --imagen
 - **Propuestas** (`/propuestas`): todas las cotizaciones (las propias; un admin ve todas), con filtro Todas/En revisión/Generadas y búsqueda por cliente o referencia. Cada fila se expande y muestra el historial completo de PDF generados de esa cotización —cada propuesta base y cada presentación editorial, con su fecha— con "Abrir para imprimir" (visor del navegador) y "Descargar" (fuerza guardar el archivo). Si no hay ninguno, enlaza de vuelta a Revisar.
 - **Revisar** (`/cotizaciones/:id`): tabla con pendientes arriba; "Elegir imagen" abre *Biblioteca* (o *Subir foto* en ítems fuera de catálogo) y *Generar imagen con IA*. Al elegir una de las 4 opciones generadas, las otras 3 se borran. Si se alcanza el tope diario, el aviso ámbar dice cuál límite y cuándo se libera.
   - *Pendientes* muestra sólo las partidas sin imagen. *Todos* muestra el orden de impresión agrupado por las secciones del PDF: se arrastra una partida por su asa (dentro de su sección) o una sección completa por su título; también con teclado (Espacio y flechas). El orden se guarda al soltar.
+  - La descripción de cada partida se edita ahí mismo: es una nota para esa cotización, no toca el catálogo ni el sistema de la empresa. Si la escribes tú, es lo que se imprime y no se manda a traducir.
   - Columna *Tipo* (Partida, Flete o Montaje) y bloque *Flete y montaje*: los cargos no se imprimen como partida, se suman abajo. Al lado, los totales tal como saldrán: Subtotal, Flete, Montaje, IVA (o "más IVA") y Total.
 - **Generar** (`/cotizaciones/:id/generar`): descarga del PDF base y entrada a la presentación editorial.
 - **Presentación editorial** (`/cotizaciones/:id/presentacion`, piloto): el vendedor escribe sus indicaciones (de ahí sale el prompt de los montajes), el título y el evento, elige tipografía de títulos (Everett o Bebas Neue), paleta y si se muestran los precios; pone las fotos de ambientación (portada, manifiesto y cierre) y, por sección, el título editorial, el texto en tres columnas y el montaje: subido, elegido de la biblioteca o generado con IA ("Generar los N montajes que faltan" los hace todos). "Generar PDF" guarda y muestra la presentación en la misma pantalla.
+  - *Plantilla*: subir una imagen de inspiración crea una plantilla reutilizable; la IA la mira y propone composición (editorial, revista o catálogo), paleta, tipografía, tamaño de títulos y piezas por página. Aplicarla copia esos parámetros a la propuesta, que después se ajustan a mano sin tocar la plantilla.
+  - *Ajustes del diseño*: los mismos parámetros sueltos, más doce paletas de la app y las que guarde el equipo (se crean con los tres colores y un nombre).
+  - *Precios, moneda e idioma*: ocultar precios, presentar en dólares con el tipo de cambio que pongas, y cambiar el idioma a inglés (con el botón *Traducir con IA*).
 - **Catálogo** (`/catalogo`): tabla con foto, medidas, etiquetas, un precio por lista y costo de reposición; formulario completo con sección de imágenes (oficial, variantes, generar con IA); carga por texto; listas de precios.
 - **Biblioteca** (`/biblioteca`): cinco métricas (incluye generaciones en 24 h) e ítems más cotizados sin foto.
 - **Usuarios** (`/usuarios`, admin): alta, rol, contraseña y baja.
@@ -182,6 +192,10 @@ python scripts/cargar_catalogo.py --csv fixtures/catalogo_plantilla.csv --imagen
 - **Imágenes generadas** (`servicios/proveedor_imagenes.py`): la base se normaliza a PNG RGBA de máximo 1024 px; `ProveedorOpenAI` usa la edición de `gpt-image-2.5-sunburst` (con `input_fidelity="high"` sólo en la familia `gpt-image-1`, que es la única que lo acepta) y un prompt fijo (forma intacta, tres cuartos, fondo neutro, luz lateral) más la petición del vendedor. Sin `OPENAI_API_KEY` actúa `ProveedorSimulado`. Cada llamada se registra en `generaciones` y hay tope diario por usuario y global (429 con la hora de liberación).
 - **PDF** (`servicios/render_pdf.py` + `plantillas/propuesta_base.html`): carta, partidas en el orden guardado con un título por sección, miniaturas incrustadas como data URI, marcador "Sin imagen", etiqueta "Render conceptual", totales (Subtotal, Flete, Montaje, IVA, Total) y leyenda al pie.
 - **Presentación editorial** (`servicios/presentacion.py` + `plantillas/presentacion_editorial.html`): páginas de 810 x 1080 pt (las del ejemplo de la marca): portada con foto, manifiesto, una apertura por sección con su montaje y tres columnas de texto, las piezas (2 por página hasta 4 piezas; después rejilla de 4), cierre de ambientación, concentrado y monograma. El tamaño de cada título gigante se calcula midiendo el texto con la fuente real (fontTools) para que llene el ancho sin desbordarse. Las fotos van incrustadas como data URI.
+- **Plantillas** (`routers/plantillas.py` + `servicios/ia_texto.py`): la inspiración se guarda como imagen `inspiracion` y se manda al modelo de visión, que responde un JSON con los parámetros; se filtran contra `ParametrosPlantilla` (lo que venga raro usa el valor por defecto). Sin IA se sigue sacando la paleta de la imagen con análisis local (color dominante para el papel, el más saturado para el acento).
+- **Idioma y medidas** (`servicios/idiomas.py`): las etiquetas fijas de los dos PDF están en un diccionario; las medidas pasan de centímetros y metros a pies y pulgadas con reglas (el catálogo las guarda siempre en cm); los textos libres los traduce la IA una vez por cotización y quedan en caché dentro de la presentación. Si la IA no está, entra un glosario de mobiliario para que el PDF no salga a medias.
+- **Moneda** (`idiomas.Dinero`): en dólares divide cada importe entre el tipo de cambio y lo dice al pie, con la fecha. Aplica igual al PDF base y a la presentación.
+- **Modelo de texto**: no se escribe a mano. Se le pregunta a la cuenta de OpenAI qué modelos tiene y se toma el primero de una lista de preferencia (`ia_texto.PREFERENCIA_MODELOS`), o el que fije `OPENAI_MODELO_TEXTO`. `/api/salud` dice cuál quedó.
 - **Marca** (`app/marca`, `app/fuentes`): logotipo y monograma en PNG que el render recolorea sólo a colores de marca (menta #B5FFBF, negro o crema); tipografías Bebas Neue y Public Sans empaquetadas. La paleta del vendedor sólo cambia fondo, texto y acento.
 - **Montajes con IA** (`proveedor_imagenes.generar_escena`): manda hasta 6 fotos de las piezas de la sección como referencia al endpoint de edición (hasta 16 acepta el modelo) con un prompt armado con las indicaciones del vendedor, y guarda el resultado como imagen `montaje` de esa cotización. Cuenta en el mismo tope diario que las variantes y sale marcado "Render conceptual" en el PDF.
 - **Flete y montaje** (`servicios/cargos.py`): al subir, una partida es cargo si su descripción dice FLETE, TRANSPORTE o TRASLADO (flete) o MONTAJE, DESMONTAJE o INSTALACIÓN (montaje), o si está en una sección llamada MONTAJE. No cuenta si la palabra viene negada ("SIN INSTALACIÓN"). El vendedor lo corrige en Revisar.
@@ -201,6 +215,7 @@ Prefijo `/api`. Todos requieren `Authorization: Bearer <token de Supabase>` salv
 | GET | `/cotizaciones/{id}` | Detalle con ítems, imagen (URL firmada) y estado |
 | PATCH | `/cotizaciones/{id}/items/{item_id}` | `{imagen_id}` asigna o quita (`null`) la imagen |
 | PUT | `/cotizaciones/{id}/orden` | `{ids}` con las partidas en el nuevo orden de impresión |
+| PATCH | `/cotizaciones/{id}/items/{item_id}/descripcion` | `{descripcion}` para esta cotización; vacío vuelve a la del sistema |
 | PUT | `/cotizaciones/{id}/items/{item_id}/cargo` | `{cargo}`: `"flete"`, `"montaje"` o `null` (partida) |
 | POST | `/cotizaciones/{id}/generar` | Renderiza el PDF, lo guarda en `exports`, registra el histórico y devuelve URL firmada |
 | GET | `/cotizaciones/{id}/pdfs` | Historial de PDF generados (base y editorial), más reciente primero; URL para ver y para descargar |
@@ -216,6 +231,13 @@ Prefijo `/api`. Todos requieren `Authorization: Bearer <token de Supabase>` salv
 | PUT | `/cotizaciones/{id}/presentacion/imagenes` | `{hueco, imagen_id}`: portada, manifiesto, cierre o `montaje:<sección>` |
 | POST | `/cotizaciones/{id}/presentacion/montajes` | `{clave, indicaciones}` → genera el montaje de esa sección con IA |
 | POST | `/cotizaciones/{id}/presentacion/pdf` | Renderiza la presentación editorial y devuelve URL firmada |
+| POST | `/cotizaciones/{id}/presentacion/traducir` | Traduce con IA los textos de la cotización y guarda el resultado |
+| GET/POST | `/plantillas` | Plantillas del equipo / crea una desde una inspiración (multipart `archivo`) |
+| PATCH/DELETE | `/plantillas/{id}` | Renombrar o ajustar parámetros / borrar con sus inspiraciones |
+| POST/DELETE | `/plantillas/{id}/inspiraciones[/{imagen_id}]` | Sumar o quitar imágenes de referencia |
+| POST | `/plantillas/{id}/analizar` | Vuelve a leer la inspiración con IA |
+| GET/POST | `/paletas` | Paletas de la app y del equipo / guardar una nueva |
+| PATCH/DELETE | `/paletas/{id}` | Editar o borrar una paleta guardada |
 | GET | `/imagenes/ambientacion` | Biblioteca de fotos de ambientación |
 | POST | `/imagenes` | multipart `archivo` (+ `item_id`, `etiquetas`, `tipo`: oficial, variante o ambientacion) |
 | POST | `/imagenes/generar` | `{imagen_base_id, peticion, item_id?, cotizacion_id?}` → 4 imágenes `generada`; 429 si se alcanzó el tope |
@@ -276,6 +298,14 @@ Prefijo `/api`. Todos requieren `Authorization: Bearer <token de Supabase>` salv
 - **Historial de PDF en tabla propia** (`cotizacion_pdfs`, migración 0010) en vez de listar el bucket: cada generación (base o editorial) queda registrada con su tipo y fecha, así Propuestas no depende de parsear rutas de Storage y sobrevive a que cambie el esquema de carpetas. Se borra en cascada con la cotización.
 - **Dos URLs firmadas por PDF**: una para ver/imprimir (`Content-Disposition` por defecto, se abre en el visor del navegador) y otra con `download=true` que fuerza "Guardar como" con el nombre que ya tiene en Storage. `Storage.urls_firmadas` gana un parámetro `descarga` en vez de duplicar el método.
 - **`estado` de la cotización sigue siendo un solo valor** (`revision`/`generada`): se pone en `generada` con el primer PDF de cualquier tipo, sin importar si después se generan más. El detalle de cuántos y de qué tipo vive en `/cotizaciones/{id}/pdfs`.
+- **La inspiración no genera la diagramación, la parametriza** (migración 0011): la IA responde un JSON acotado (composición, paleta, tipografía, escala de títulos, fotos a sangre, piezas por página) y el PDF lo arma la plantilla de siempre. Así cada propuesta puede verse distinta sin que el resultado sea impredecible ni se salga de la marca.
+- **Aplicar una plantilla copia sus parámetros a la cotización**, no la referencia: cambiar la plantilla después no altera propuestas ya armadas. `plantilla_id` sólo se guarda para saber de dónde salieron y para mandar sus inspiraciones como referencia de estilo al generar montajes.
+- **Las paletas viven en el backend** (doce de la app en el código, las del equipo en la tabla `paletas`), no duplicadas en el frontend: una sola fuente para el PDF y para la interfaz.
+- **Las medidas se convierten con reglas, no con IA**: el catálogo las guarda en centímetros y las descripciones del sistema mezclan centímetros y metros, a veces sin unidad ("REDONDA DE 1.80"). Un decimal suelto entre 0.2 y 20 se toma como metros: es lo que usa este catálogo.
+- **La traducción se paga una vez por texto**: queda en `presentaciones.config.traducciones` y se reutiliza. Lo que el vendedor escribió a mano en Revisar se imprime tal cual, sin traducir ni convertir, porque es una corrección deliberada.
+- **La moneda y el idioma viven en la presentación y los usan los dos PDF**: así el cliente extranjero no recibe la propuesta base en pesos y español y la editorial en dólares e inglés.
+- **En dólares el tipo de cambio es obligatorio** (lo valida el modelo): sin él no se inventa una conversión, se rechaza el guardado.
+- **Configuraciones guardadas antes de las plantillas se migran al vuelo** (`presentacion.migrar_config`): la paleta y la tipografía sueltas pasan a `parametros` sin perder textos ni imágenes.
 - **Codificación UTF-8 con finales de línea LF** (`.gitattributes`).
 
 ## Pendientes conocidos
@@ -287,7 +317,8 @@ Prefijo `/api`. Todos requieren `Authorization: Bearer <token de Supabase>` salv
 - Identidad de marca en `propuesta_base.html` (el PDF base sigue siendo neutro; la marca está en la presentación editorial).
 - Faltan los archivos de la tipografía Everett (ver Decisiones) y recortar el fondo de las fotos de las piezas: sobre fondo crema se nota el recuadro blanco de la foto original.
 - La biblioteca de ambientación todavía no se puede depurar desde la interfaz (no hay borrar).
-- Los textos de la presentación los escribe el vendedor; falta probar si conviene redactarlos con IA a partir de las indicaciones.
+- La traducción y la lectura de inspiraciones dependen del modelo de texto de OpenAI; el glosario y el análisis local de color son el respaldo, pero dan menos calidad. `/estado` dice si la IA está disponible.
+- Las páginas de piezas usan posiciones fijas: si una sección tiene menos piezas que las que pide la plantilla, la última página queda con espacio libre.
+- Sólo hay inglés. Para otro idioma hay que sumar su diccionario de etiquetas en `servicios/idiomas.py`.
 - Las cotizaciones subidas antes de la migración 0008 no tienen sección guardada: se ven sin títulos de sección (se reordenan partida por partida) y sin cargos detectados (se pueden marcar a mano).
-- "Diseño con IA" (Fase 2): la tarjeta existe deshabilitada.
 - Paginación en la lista de propuestas si crece mucho (hoy las últimas 100).

@@ -80,6 +80,34 @@ def _verificar_proveedor(config: Configuracion) -> dict[str, Any]:
     return _renglon(False, f"Proveedor desconocido '{efectivo}'; usa 'openai' o 'simulado'")
 
 
+_CACHE_IA: dict[str, Any] = {"hasta": 0.0, "resultado": None}
+_VIDA_CACHE_IA = 300.0
+
+
+async def _verificar_ia_texto(config: Configuracion) -> dict[str, Any]:
+    """Modelo de texto/visión con el que se traduce y se leen las inspiraciones.
+
+    Se pregunta a la cuenta qué modelos tiene, así que se cachea unos minutos.
+    """
+    ahora = time.monotonic()
+    if _CACHE_IA["resultado"] is not None and ahora < _CACHE_IA["hasta"]:
+        return _CACHE_IA["resultado"]
+
+    from app.servicios.ia_texto import ErrorIaTexto, elegir_modelo
+
+    try:
+        modelo = await elegir_modelo(config)
+        resultado = _renglon(True, f"Traducción e inspiraciones con {modelo}")
+    except ErrorIaTexto as error:
+        resultado = _renglon(
+            False,
+            f"Sin IA de texto: {str(error)[:150]}. Las traducciones usan el glosario y las inspiraciones "
+            "sólo aportan su paleta.",
+        )
+    _CACHE_IA.update(hasta=ahora + _VIDA_CACHE_IA, resultado=resultado)
+    return resultado
+
+
 def _verificar_marca() -> dict[str, Any]:
     """La presentación editorial necesita los logos, las tipografías y su plantilla en la imagen."""
     from app.servicios import presentacion
@@ -153,6 +181,7 @@ async def salud(request: Request, config: Annotated[Configuracion, Depends(obten
     verificaciones["weasyprint"] = await _verificar_weasyprint()
     verificaciones["proveedor_imagenes"] = _verificar_proveedor(config)
     verificaciones["marca"] = _verificar_marca()
+    verificaciones["ia_texto"] = await _verificar_ia_texto(config)
     verificaciones["mapeo_columnas"] = _verificar_mapeo(config)
 
     todo_ok = all(v["ok"] for v in verificaciones.values())

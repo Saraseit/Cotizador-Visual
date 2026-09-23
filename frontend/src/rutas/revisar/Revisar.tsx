@@ -11,6 +11,7 @@ import { Miniatura } from '@/componentes/Miniatura'
 import { PildoraEstadoItem } from '@/componentes/Pildora'
 import { cantidad, moneda } from '@/lib/formato'
 
+import { DescripcionEditable } from './DescripcionEditable'
 import { SelectorImagen } from './SelectorImagen'
 import { TablaOrdenable } from './TablaOrdenable'
 
@@ -80,14 +81,7 @@ export function Revisar() {
       }),
       columna.accessor('descripcion_origen', {
         header: 'Descripción',
-        cell: ({ getValue, row }) => (
-          <div className="max-w-md">
-            <p>{getValue()}</p>
-            {row.original.item && row.original.item.nombre !== getValue() && (
-              <p className="text-xs text-texto-secundario">Catálogo: {row.original.item.nombre}</p>
-            )}
-          </div>
-        ),
+        cell: ({ row }) => <DescripcionEditable item={row.original} cotizacionId={id ?? ''} />,
       }),
       columna.accessor('cantidad', {
         header: () => <span className="block text-right">Cantidad</span>,
@@ -129,7 +123,7 @@ export function Revisar() {
         },
       }),
     ],
-    [mutarCargo, cambiandoCargo],
+    [mutarCargo, cambiandoCargo, id],
   )
 
   const tabla = useReactTable({

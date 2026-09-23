@@ -1,11 +1,12 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="{{ idioma }}">
 <head>
   <meta charset="utf-8">
   <title>{{ titulo_portada }} · {{ evento or cliente }}</title>
   <style>
-    /* Presentación editorial de Minimal 4.0. Página de 810 x 1080 pt (la de la presentación de ejemplo).
-       Los identificadores de marca (logotipo, monograma, menta) no dependen de la paleta. */
+    /* Presentación de Minimal 4.0. Página de 810 x 1080 pt (la de la presentación de ejemplo).
+       La plantilla decide composición, paleta, tipografía, tamaño de títulos y piezas por página;
+       los identificadores de marca (logotipo, monograma, menta) no dependen de ella. */
     @page { size: 810pt 1080pt; margin: 0; background: {{ paleta.fondo }}; }
 
     {% for peso, uri in everett.items() %}
@@ -36,6 +37,8 @@
     .contener { background-size: contain; }
     .velo { position: absolute; left: 0; top: 0; width: 810pt; height: 1079pt;
             background: linear-gradient(to bottom, rgba(0,0,0,.42), rgba(0,0,0,.12) 38%, rgba(0,0,0,.18) 62%, rgba(0,0,0,.7)); }
+    .velo-bajo { position: absolute; left: 0; bottom: 0; width: 810pt; height: 520pt;
+                 background: linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,.72)); }
 
     .titulo {
       font-family: {{ fuente_titulos|safe }};
@@ -72,6 +75,13 @@
     .rejilla .ficha .nombre { font-size: 15pt; }
     .rejilla .ficha .detalle { font-size: 10.5pt; margin-top: 5pt; }
     .rejilla .ficha .cifras { font-size: 11pt; margin-top: 8pt; }
+    .rejilla.densa .ficha .nombre { font-size: 12.5pt; line-height: 1.12; }
+    .rejilla.densa .ficha .detalle { font-size: 9pt; margin-top: 4pt; }
+    .rejilla.densa .ficha .medidas { font-size: 9pt; margin-top: 3pt; }
+    .rejilla.densa .ficha .cifras { font-size: 9.5pt; margin-top: 6pt; }
+    .solo .ficha .nombre { font-size: 30pt; }
+    .solo .ficha .detalle { font-size: 14pt; }
+    .solo .ficha .cifras { font-size: 14pt; }
 
     /* Concentrado */
     table.concentrado { width: 100%; border-collapse: collapse; font-size: 13pt; margin-top: 34pt; }
@@ -84,16 +94,52 @@
     .totales .monto { text-align: right; white-space: nowrap; }
     .totales tr.total td { border-top: 1pt solid {{ paleta.texto }}; padding-top: 12pt; font-size: 18pt; font-weight: 500; }
     .notas { margin-top: 40pt; font-size: 10pt; color: {{ texto_suave }}; line-height: 1.45; }
+
+    /* Catálogo: banda de sección */
+    .banda { position: absolute; left: 0; top: 0; width: 810pt; background: {{ paleta.acento }}; }
   </style>
 </head>
 <body>
 
+{% set sangre = parametros.fotos_a_sangre %}
+{% set margen_foto = 0 if sangre else 40 %}
+
 {# ------------------------------------------------------------------ Portada #}
+{% if parametros.composicion == 'revista' %}
+<section class="pagina oscura">
+  {% if fotos.portada %}
+    <div class="capa" style="left: 0; top: 0; width: 810pt; height: 1079pt; background-image: url('{{ fotos.portada }}');"></div>
+  {% else %}
+    <div class="capa" style="left: 0; top: 0; width: 810pt; height: 1079pt; background: {{ paleta.acento }};"></div>
+  {% endif %}
+  <div class="velo-bajo"></div>
+  <div class="franja" style="top: 46pt; color: {{ menta }};">
+    <div style="width: 480pt;">{{ evento }}</div>
+    <div style="width: 250pt; text-align: right;"><img src="{{ logotipo_menta }}" alt="Minimal 4.0" style="height: 11pt; margin-top: 3pt;"></div>
+  </div>
+  <h1 class="titulo varias" style="position: absolute; left: 40pt; width: 730pt; bottom: 70pt; color: #FFFCF7; font-size: {{ tamano_portada }}pt;">{{ titulo_portada }}</h1>
+</section>
+
+{% elif parametros.composicion == 'catalogo' %}
+<section class="pagina">
+  <div class="banda" style="height: 300pt;"></div>
+  <img class="marca" src="{{ logotipo_menta }}" alt="Minimal 4.0" style="top: 40pt; left: 40pt;">
+  <h1 class="titulo varias" style="position: absolute; left: 40pt; width: 730pt; top: 96pt; color: {{ paleta.fondo }}; font-size: {{ tamano_portada }}pt;">{{ titulo_portada }}</h1>
+  {% if fotos.portada %}
+    <div class="capa" style="left: {{ margen_foto }}pt; top: 340pt; width: {{ 810 - 2 * margen_foto }}pt; height: 560pt; background-image: url('{{ fotos.portada }}');"></div>
+  {% endif %}
+  <div class="franja" style="bottom: 60pt;">
+    <div style="width: 480pt;">{{ evento }}</div>
+    <div style="width: 250pt; text-align: right;"><img src="{{ logotipo_identificador }}" alt="Minimal 4.0" style="height: 11pt;"></div>
+  </div>
+</section>
+
+{% else %}
 <section class="pagina">
   {% if fotos.portada %}
-    <div class="capa" style="left: 0; top: 0; width: 810pt; height: 600pt; background-image: url('{{ fotos.portada }}');"></div>
+    <div class="capa" style="left: {{ margen_foto }}pt; top: {{ margen_foto }}pt; width: {{ 810 - 2 * margen_foto }}pt; height: {{ 600 - margen_foto }}pt; background-image: url('{{ fotos.portada }}');"></div>
   {% else %}
-    <div class="capa" style="left: 0; top: 0; width: 810pt; height: 600pt; background: {{ paleta.acento }};"></div>
+    <div class="capa" style="left: {{ margen_foto }}pt; top: {{ margen_foto }}pt; width: {{ 810 - 2 * margen_foto }}pt; height: {{ 600 - margen_foto }}pt; background: {{ paleta.acento }};"></div>
   {% endif %}
   <div class="franja" style="top: 626pt;">
     <div style="width: 250pt;">{{ titulo_portada }}</div>
@@ -102,9 +148,10 @@
   </div>
   <h1 class="titulo varias" style="position: absolute; left: 40pt; width: 730pt; bottom: 64pt; text-align: center; font-size: {{ tamano_portada }}pt;">{{ titulo_portada }}</h1>
 </section>
+{% endif %}
 
 {# --------------------------------------------------------------- Manifiesto #}
-{% if manifiesto or fotos.manifiesto %}
+{% if parametros.mostrar_manifiesto and (manifiesto or fotos.manifiesto) %}
 <section class="pagina oscura">
   {% if fotos.manifiesto %}
     <div class="capa" style="left: 0; top: 0; width: 810pt; height: 1079pt; background-image: url('{{ fotos.manifiesto }}');"></div>
@@ -122,32 +169,83 @@
 {# ---------------------------------------------------------------- Secciones #}
 {% for s in secciones %}
   {% set alto_titulo = s.tamano_titulo * 0.9 %}
-  {% set tope_imagen = 76 + alto_titulo + 30 %}
-  <section class="pagina">
-    <img class="marca" src="{{ logotipo_menta }}" alt="Minimal 4.0" style="top: 40pt; left: 40pt;">
-    {% if s.montaje or s.portada_pieza %}
-      <h2 class="titulo" style="position: absolute; top: 76pt; left: 40pt; width: 730pt; text-align: center; color: {{ paleta.acento }}; font-size: {{ s.tamano_titulo }}pt;">{{ s.titulo }}</h2>
+
+  {% if parametros.composicion == 'revista' %}
+    <section class="pagina oscura">
       {% if s.montaje %}
-        <div class="capa" style="left: 0; top: {{ tope_imagen }}pt; width: 810pt; height: {{ 1079 - tope_imagen - 250 }}pt; background-image: url('{{ s.montaje }}');">
-          {% if s.montaje_conceptual %}<span class="etiqueta-ia">Render conceptual · IA</span>{% endif %}
+        <div class="capa" style="left: 0; top: 0; width: 810pt; height: 1079pt; background-image: url('{{ s.montaje }}');">
+          {% if s.montaje_conceptual %}<span class="etiqueta-ia">{{ t.render_conceptual_ia }}</span>{% endif %}
         </div>
-      {% else %}
-        <div class="capa contener" style="left: 90pt; top: {{ tope_imagen }}pt; width: 630pt; height: {{ 1079 - tope_imagen - 270 }}pt; background-image: url('{{ s.portada_pieza }}');"></div>
+        <div class="velo"></div>
+      {% elif s.portada_pieza %}
+        <div class="capa contener" style="left: 90pt; top: 200pt; width: 630pt; height: 560pt; background-image: url('{{ s.portada_pieza }}');"></div>
+      {% endif %}
+      <img class="marca" src="{{ logotipo_menta }}" alt="Minimal 4.0" style="top: 40pt; left: 40pt;">
+      <h2 class="titulo" style="position: absolute; top: 90pt; left: 40pt; width: 730pt; text-align: center; color: #FFFCF7; font-size: {{ s.tamano_titulo }}pt;">{{ s.titulo }}</h2>
+      <div class="columnas" style="bottom: 60pt; color: {{ menta }};">
+        {% for texto in s.columnas %}<div class="col">{% for renglon in texto|renglones %}{{ renglon }}<br>{% endfor %}</div>{% endfor %}
+      </div>
+    </section>
+
+  {% elif parametros.composicion == 'catalogo' %}
+    {% set alto_banda = alto_titulo + 70 %}
+    <section class="pagina">
+      <div class="banda" style="height: {{ alto_banda }}pt;"></div>
+      <img class="marca" src="{{ logotipo_menta }}" alt="Minimal 4.0" style="top: 30pt; left: 40pt;">
+      <h2 class="titulo" style="position: absolute; top: 54pt; left: 40pt; width: 730pt; color: {{ paleta.fondo }}; font-size: {{ s.tamano_titulo }}pt;">{{ s.titulo }}</h2>
+      {% if s.montaje or s.portada_pieza %}
+        <div class="capa{{ ' contener' if not s.montaje }}" style="left: {{ margen_foto }}pt; top: {{ alto_banda + 30 }}pt; width: {{ 810 - 2 * margen_foto }}pt; height: {{ 1079 - alto_banda - 30 - 230 }}pt; background-image: url('{{ s.montaje or s.portada_pieza }}');">
+          {% if s.montaje_conceptual %}<span class="etiqueta-ia">{{ t.render_conceptual_ia }}</span>{% endif %}
+        </div>
       {% endif %}
       <div class="columnas" style="bottom: 60pt;">
         {% for texto in s.columnas %}<div class="col">{% for renglon in texto|renglones %}{{ renglon }}<br>{% endfor %}</div>{% endfor %}
       </div>
-    {% else %}
-      <h2 class="titulo" style="position: absolute; top: 380pt; left: 40pt; width: 730pt; text-align: center; color: {{ paleta.acento }}; font-size: {{ s.tamano_titulo }}pt;">{{ s.titulo }}</h2>
-      <div class="columnas" style="bottom: 60pt;">
-        {% for texto in s.columnas %}<div class="col">{% for renglon in texto|renglones %}{{ renglon }}<br>{% endfor %}</div>{% endfor %}
-      </div>
-    {% endif %}
-  </section>
+    </section>
 
+  {% else %}
+    {% set tope_imagen = 76 + alto_titulo + 30 %}
+    <section class="pagina">
+      <img class="marca" src="{{ logotipo_menta }}" alt="Minimal 4.0" style="top: 40pt; left: 40pt;">
+      {% if s.montaje or s.portada_pieza %}
+        <h2 class="titulo" style="position: absolute; top: 76pt; left: 40pt; width: 730pt; text-align: center; color: {{ paleta.acento }}; font-size: {{ s.tamano_titulo }}pt;">{{ s.titulo }}</h2>
+        {% if s.montaje %}
+          <div class="capa" style="left: {{ margen_foto }}pt; top: {{ tope_imagen }}pt; width: {{ 810 - 2 * margen_foto }}pt; height: {{ 1079 - tope_imagen - 250 }}pt; background-image: url('{{ s.montaje }}');">
+            {% if s.montaje_conceptual %}<span class="etiqueta-ia">{{ t.render_conceptual_ia }}</span>{% endif %}
+          </div>
+        {% else %}
+          <div class="capa contener" style="left: 90pt; top: {{ tope_imagen }}pt; width: 630pt; height: {{ 1079 - tope_imagen - 270 }}pt; background-image: url('{{ s.portada_pieza }}');"></div>
+        {% endif %}
+        <div class="columnas" style="bottom: 60pt;">
+          {% for texto in s.columnas %}<div class="col">{% for renglon in texto|renglones %}{{ renglon }}<br>{% endfor %}</div>{% endfor %}
+        </div>
+      {% else %}
+        <h2 class="titulo" style="position: absolute; top: 380pt; left: 40pt; width: 730pt; text-align: center; color: {{ paleta.acento }}; font-size: {{ s.tamano_titulo }}pt;">{{ s.titulo }}</h2>
+        <div class="columnas" style="bottom: 60pt;">
+          {% for texto in s.columnas %}<div class="col">{% for renglon in texto|renglones %}{{ renglon }}<br>{% endfor %}</div>{% endfor %}
+        </div>
+      {% endif %}
+    </section>
+  {% endif %}
+
+  {# ------------------------------------------------------ Páginas de piezas #}
   {% for pagina in s.paginas %}
-    <section class="pagina {{ pagina.formato }}">
-      {% if pagina.formato == 'par' %}
+    <section class="pagina {{ pagina.formato }}{{ ' densa' if pagina.columnas == 3 }}">
+      {% if pagina.formato == 'solo' %}
+        {% set p = pagina.piezas[0] %}
+        {% if p.foto %}
+          <div class="foto-pieza" style="left: 90pt; top: 130pt; width: 630pt; height: 560pt; background-image: url('{{ p.foto }}');"></div>
+        {% else %}
+          <div class="sin-foto" style="left: 90pt; top: 130pt; width: 630pt; height: 560pt;">{{ t.sin_imagen }}</div>
+        {% endif %}
+        <div class="ficha" style="left: 90pt; top: 760pt; width: 630pt; text-align: center;">
+          <p class="nombre">{{ p.nombre }}</p>
+          {% if p.detalle %}<p class="detalle">{{ p.detalle }}</p>{% endif %}
+          {% if p.medidas %}<p class="medidas">{{ p.medidas }}</p>{% endif %}
+          <p class="cifras">{{ p.cantidad }} {{ t.pieza if p.cantidad == '1' else t.piezas }}{% if mostrar_precios %} · {{ p.precio_unitario }} {{ t.cada_uno }} · {{ p.importe }}{% endif %}</p>
+        </div>
+
+      {% elif pagina.formato == 'par' %}
         {% for p in pagina.piezas %}
           {% set arriba = loop.first %}
           {% set foto_x = 400 if arriba else 40 %}
@@ -155,15 +253,33 @@
           {% if p.foto %}
             <div class="foto-pieza" style="left: {{ foto_x }}pt; top: {{ foto_y }}pt; width: 370pt; height: 430pt; background-image: url('{{ p.foto }}');"></div>
           {% else %}
-            <div class="sin-foto" style="left: {{ foto_x }}pt; top: {{ foto_y }}pt; width: 370pt; height: 430pt;">Sin imagen</div>
+            <div class="sin-foto" style="left: {{ foto_x }}pt; top: {{ foto_y }}pt; width: 370pt; height: 430pt;">{{ t.sin_imagen }}</div>
           {% endif %}
           <div class="ficha" style="left: {{ 40 if arriba else 440 }}pt; top: {{ 200 if arriba else 690 }}pt; width: 330pt; text-align: {{ 'right' if arriba else 'left' }};">
             <p class="nombre">{{ p.nombre }}</p>
             {% if p.detalle %}<p class="detalle">{{ p.detalle }}</p>{% endif %}
             {% if p.medidas %}<p class="medidas">{{ p.medidas }}</p>{% endif %}
-            <p class="cifras">{{ p.cantidad }} {{ 'pieza' if p.cantidad == '1' else 'piezas' }}{% if mostrar_precios %} · {{ p.precio_unitario }} c/u · {{ p.importe }}{% endif %}</p>
+            <p class="cifras">{{ p.cantidad }} {{ t.pieza if p.cantidad == '1' else t.piezas }}{% if mostrar_precios %} · {{ p.precio_unitario }} {{ t.cada_uno }} · {{ p.importe }}{% endif %}</p>
           </div>
         {% endfor %}
+
+      {% elif pagina.columnas == 3 %}
+        {% for p in pagina.piezas %}
+          {% set x = 40 + (loop.index0 % 3) * 250 %}
+          {% set y = 100 if loop.index0 < 3 else 560 %}
+          {% if p.foto %}
+            <div class="foto-pieza" style="left: {{ x }}pt; top: {{ y }}pt; width: 230pt; height: 220pt; background-image: url('{{ p.foto }}');"></div>
+          {% else %}
+            <div class="sin-foto" style="left: {{ x }}pt; top: {{ y }}pt; width: 230pt; height: 220pt;">{{ t.sin_imagen }}</div>
+          {% endif %}
+          <div class="ficha" style="left: {{ x }}pt; top: {{ y + 234 }}pt; width: 230pt;">
+            <p class="nombre">{{ p.nombre }}</p>
+            {% if p.detalle %}<p class="detalle">{{ p.detalle }}</p>{% endif %}
+            {% if p.medidas %}<p class="medidas">{{ p.medidas }}</p>{% endif %}
+            <p class="cifras">{{ p.cantidad }} {{ t.pieza if p.cantidad == '1' else t.piezas }}{% if mostrar_precios %} · {{ p.importe }}{% endif %}</p>
+          </div>
+        {% endfor %}
+
       {% else %}
         {% for p in pagina.piezas %}
           {% set x = 40 if loop.index0 % 2 == 0 else 425 %}
@@ -171,12 +287,12 @@
           {% if p.foto %}
             <div class="foto-pieza" style="left: {{ x }}pt; top: {{ y }}pt; width: 345pt; height: 320pt; background-image: url('{{ p.foto }}');"></div>
           {% else %}
-            <div class="sin-foto" style="left: {{ x }}pt; top: {{ y }}pt; width: 345pt; height: 320pt;">Sin imagen</div>
+            <div class="sin-foto" style="left: {{ x }}pt; top: {{ y }}pt; width: 345pt; height: 320pt;">{{ t.sin_imagen }}</div>
           {% endif %}
           <div class="ficha" style="left: {{ x }}pt; top: {{ y + 334 }}pt; width: 345pt;">
             <p class="nombre">{{ p.nombre }}</p>
             {% if p.detalle %}<p class="detalle">{{ p.detalle }}</p>{% endif %}
-            <p class="cifras">{{ p.cantidad }} {{ 'pieza' if p.cantidad == '1' else 'piezas' }}{% if mostrar_precios %} · {{ p.precio_unitario }} c/u · {{ p.importe }}{% endif %}</p>
+            <p class="cifras">{{ p.cantidad }} {{ t.pieza if p.cantidad == '1' else t.piezas }}{% if mostrar_precios %} · {{ p.precio_unitario }} {{ t.cada_uno }} · {{ p.importe }}{% endif %}</p>
           </div>
         {% endfor %}
       {% endif %}
@@ -187,7 +303,7 @@
 {% endfor %}
 
 {# ------------------------------------------------------ Cierre de ambientación #}
-{% if fotos.cierre %}
+{% if parametros.mostrar_cierre and fotos.cierre %}
 <section class="pagina oscura">
   <div class="capa" style="left: 0; top: 0; width: 810pt; height: 700pt; background-image: url('{{ fotos.cierre }}');"></div>
   <img src="{{ logotipo_menta }}" alt="Minimal 4.0" style="position: absolute; top: 770pt; left: 40pt; width: 730pt;">
@@ -202,16 +318,16 @@
 {# --------------------------------------------------------------- Concentrado #}
 <section class="pagina flujo">
   <img class="marca" src="{{ logotipo_menta }}" alt="Minimal 4.0" style="top: 40pt; left: 40pt;">
-  <h2 class="titulo" style="padding-top: 90pt; color: {{ paleta.acento }}; font-size: {{ tamano_concentrado }}pt;">{{ 'Inversión' if mostrar_precios else 'Resumen' }}</h2>
-  <p style="margin-top: 18pt; font-size: 14pt;">{{ evento or cliente }}{% if referencia %} · Cotización {{ referencia }}{% endif %}</p>
+  <h2 class="titulo" style="padding-top: 90pt; color: {{ paleta.acento }}; font-size: {{ tamano_concentrado }}pt;">{{ titulo_concentrado }}</h2>
+  <p style="margin-top: 18pt; font-size: 14pt;">{{ evento or cliente }}{% if referencia %} · {{ t.cotizacion }} {{ referencia }}{% endif %}</p>
 
   <table class="concentrado">
     <thead>
       <tr>
-        <th>Sección</th>
-        <th class="num">Partidas</th>
-        <th class="num">Piezas</th>
-        {% if mostrar_precios %}<th class="num">Importe</th>{% endif %}
+        <th>{{ t.seccion }}</th>
+        <th class="num">{{ t.partidas|capitalize }}</th>
+        <th class="num">{{ t.piezas|capitalize }}</th>
+        {% if mostrar_precios %}<th class="num">{{ t.importe }}</th>{% endif %}
       </tr>
     </thead>
     <tbody>
@@ -231,21 +347,21 @@
       {% for etiqueta, monto in totales %}
         <tr><td>{{ etiqueta }}</td><td class="monto">{{ monto }}</td></tr>
       {% endfor %}
-      <tr class="total"><td>Total{% if mas_iva %} <span style="font-size: 11pt; font-weight: 400;">(más IVA)</span>{% endif %}</td><td class="monto">{{ total }}</td></tr>
+      <tr class="total"><td>{{ t.total }}{% if mas_iva %} <span style="font-size: 11pt; font-weight: 400;">{{ t.mas_iva }}</span>{% endif %}</td><td class="monto">{{ total }}</td></tr>
     </table>
   {% else %}
     <table class="totales">
-      <tr class="total"><td>Total de piezas</td><td class="monto">{{ total_piezas }}</td></tr>
+      <tr class="total"><td>{{ t.total_piezas }}</td><td class="monto">{{ total_piezas }}</td></tr>
     </table>
   {% endif %}
 
   <div class="notas">
     {% if not mostrar_precios and (hay_flete or hay_montaje) %}
-      <p>La propuesta considera {{ 'flete y montaje' if hay_flete and hay_montaje else ('flete' if hay_flete else 'montaje') }}.</p>
+      <p>{{ t.considera_flete_montaje if hay_flete and hay_montaje else (t.considera_flete if hay_flete else t.considera_montaje) }}</p>
     {% endif %}
-    {% if mostrar_precios %}<p>Precios en pesos mexicanos{% if mas_iva %}, más IVA{% endif %}.</p>{% endif %}
-    {% if hay_conceptuales %}<p>Las imágenes marcadas como render conceptual se generaron con IA para ilustrar el montaje; el mobiliario y el espacio reales pueden variar.</p>{% endif %}
-    <p>{{ fecha }}{% if referencia %} · Referencia {{ referencia }}{% endif %} · minimalcuatrocero.com</p>
+    {% if mostrar_precios %}<p>{{ nota_moneda }}</p>{% endif %}
+    {% if hay_conceptuales %}<p>{{ t.nota_conceptuales }}</p>{% endif %}
+    <p>{{ fecha }}{% if referencia %} · {{ t.referencia }} {{ referencia }}{% endif %} · minimalcuatrocero.com</p>
   </div>
 </section>
 

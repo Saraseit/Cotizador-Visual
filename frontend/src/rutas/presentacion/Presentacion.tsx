@@ -1,9 +1,25 @@
-import { ArrowLeft, ExternalLink, FileDown, ImagePlus, Sparkles } from 'lucide-react'
+import { ArrowLeft, ExternalLink, FileDown, ImagePlus, Languages, Sparkles } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
-import { useCotizacion, useGenerarMontaje, useGenerarPdfPresentacion, useGuardarPresentacion, usePresentacion } from '@/api/consultas'
-import type { ConfigPresentacionEntrada, Imagen, Paleta, Presentacion as PresentacionDatos, ResultadoPdf, SeccionVista } from '@/api/tipos'
+import {
+  useCotizacion,
+  useGenerarMontaje,
+  useGenerarPdfPresentacion,
+  useGuardarPresentacion,
+  usePresentacion,
+  useTraducirPresentacion,
+} from '@/api/consultas'
+import type {
+  Composicion,
+  ConfigPresentacionEntrada,
+  Imagen,
+  ParametrosPlantilla,
+  PiezasPorPagina,
+  Presentacion as PresentacionDatos,
+  ResultadoPdf,
+  SeccionVista,
+} from '@/api/tipos'
 import { Aviso, mensajeDeError } from '@/componentes/Aviso'
 import { Boton } from '@/componentes/Boton'
 import { Campo, Chip } from '@/componentes/Campo'
@@ -11,13 +27,11 @@ import { Pildora } from '@/componentes/Pildora'
 import { moneda } from '@/lib/formato'
 
 import { SelectorImagenHueco } from './SelectorImagenHueco'
+import { SelectorPaleta } from './SelectorPaleta'
+import { NOMBRE_COMPOSICION, SelectorPlantilla } from './SelectorPlantilla'
 
-const PALETAS: { nombre: string; paleta: Paleta }[] = [
-  { nombre: 'Crema', paleta: { fondo: '#FFFCF7', texto: '#111111', acento: '#603D22' } },
-  { nombre: 'Arena', paleta: { fondo: '#F2EADF', texto: '#2A2118', acento: '#8A5A3B' } },
-  { nombre: 'Olivo', paleta: { fondo: '#EAEDE1', texto: '#1F2418', acento: '#55613A' } },
-  { nombre: 'Noche', paleta: { fondo: '#101010', texto: '#F5F5F5', acento: '#C9A27E' } },
-]
+const COMPOSICIONES = Object.keys(NOMBRE_COMPOSICION) as Composicion[]
+const PIEZAS_POR_PAGINA: PiezasPorPagina[] = [1, 2, 4, 6]
 
 const HUECOS_AMBIENTACION = [
   { hueco: 'portada', titulo: 'Portada', ayuda: 'La foto grande de la primera página.' },
@@ -29,9 +43,12 @@ const entrada = (datos: PresentacionDatos): ConfigPresentacionEntrada => ({
   brief: datos.config.brief,
   titulo: datos.config.titulo,
   evento: datos.config.evento,
-  tipografia_titulos: datos.config.tipografia_titulos,
-  paleta: { ...datos.config.paleta },
+  plantilla_id: datos.config.plantilla_id,
+  parametros: { ...datos.config.parametros, paleta: { ...datos.config.parametros.paleta } },
   mostrar_precios: datos.config.mostrar_precios,
+  moneda: datos.config.moneda,
+  tipo_cambio: datos.config.tipo_cambio,
+  idioma: datos.config.idioma,
   manifiesto: [...datos.config.manifiesto],
   cierre: [...datos.config.cierre],
   // Las secciones que manda el servidor son las de la cotización, con lo ya configurado.
@@ -91,6 +108,7 @@ export function Presentacion() {
   const guardar = useGuardarPresentacion(id)
   const generarMontaje = useGenerarMontaje(id)
   const generarPdf = useGenerarPdfPresentacion(id)
+  const traducir = useTraducirPresentacion(id)
 
   const [borrador, setBorrador] = useState<ConfigPresentacionEntrada | null>(null)
   const [guardado, setGuardado] = useState('')
@@ -122,6 +140,10 @@ export function Presentacion() {
   if (!borrador) return <p className="text-texto-secundario">Cargando presentación…</p>
 
   const cambiar = (cambios: Partial<ConfigPresentacionEntrada>) => setBorrador({ ...borrador, ...cambios })
+  const parametros = borrador.parametros
+  const cambiarParametros = (cambios: Partial<ParametrosPlantilla>) =>
+    setBorrador({ ...borrador, parametros: { ...borrador.parametros, ...cambios } })
+  const traducidos = Object.keys(datos.config.traducciones ?? {}).length
   const cambiarSeccion = (clave: string, cambios: Partial<SeccionVista>) =>
     setBorrador({
       ...borrador,
@@ -133,6 +155,11 @@ export function Presentacion() {
     const texto = JSON.stringify(borrador)
     await guardar.mutateAsync(borrador)
     setGuardado(texto)
+  }
+
+  const traducirAhora = async () => {
+    await guardarAhora() // la IA traduce lo que ya está guardado
+    await traducir.mutateAsync()
   }
 
   const generarUno = async (clave: string) => {
@@ -161,8 +188,8 @@ export function Presentacion() {
   }
 
   const faltanMontajes = datos.secciones.filter((s) => s.incluir && !datos.config.imagenes[`montaje:${s.clave}`]).length
-  const ocupado = guardar.isPending || generarMontaje.isPending || generarPdf.isPending
-  const error = guardar.error ?? generarMontaje.error ?? generarPdf.error
+  const ocupado = guardar.isPending || generarMontaje.isPending || generarPdf.isPending || traducir.isPending
+  const error = guardar.error ?? generarMontaje.error ?? generarPdf.error ?? traducir.error
 
   return (
     <div className="pb-28">
@@ -210,13 +237,32 @@ export function Presentacion() {
             </div>
           </section>
 
+          <SelectorPlantilla
+            plantillaId={borrador.plantilla_id}
+            alAplicar={(plantilla) =>
+              cambiar({
+                plantilla_id: plantilla.id,
+                parametros: { ...plantilla.parametros, paleta: { ...plantilla.parametros.paleta } },
+              })
+            }
+          />
+
           <section className="tarjeta p-5">
-            <h2 className="text-xl">Estilo</h2>
+            <h2 className="text-xl">Ajustes del diseño</h2>
             <p className="mt-1 text-sm text-texto-secundario">
-              El logotipo, las tipografías y el verde de marca no cambian; la paleta de la propuesta sí.
+              Salen de la plantilla y los puedes mover aquí sin cambiarla. El logotipo, las tipografías de marca y el verde no se tocan.
             </p>
 
-            <p className="mt-4 text-sm font-medium">Tipografía de los títulos</p>
+            <p className="mt-4 text-sm font-medium">Composición</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {COMPOSICIONES.map((valor) => (
+                <Chip key={valor} activo={parametros.composicion === valor} onClick={() => cambiarParametros({ composicion: valor })}>
+                  {NOMBRE_COMPOSICION[valor]}
+                </Chip>
+              ))}
+            </div>
+
+            <p className="mt-5 text-sm font-medium">Tipografía de los títulos</p>
             <div className="mt-2 flex flex-wrap gap-2">
               {(
                 [
@@ -224,54 +270,73 @@ export function Presentacion() {
                   ['bebas', 'Bebas Neue'],
                 ] as const
               ).map(([valor, nombre]) => (
-                <Chip key={valor} activo={borrador.tipografia_titulos === valor} onClick={() => cambiar({ tipografia_titulos: valor })}>
+                <Chip
+                  key={valor}
+                  activo={parametros.tipografia_titulos === valor}
+                  onClick={() => cambiarParametros({ tipografia_titulos: valor })}
+                >
                   {nombre}
                 </Chip>
               ))}
             </div>
 
-            <p className="mt-5 text-sm font-medium">Paleta</p>
+            <p className="mt-5 text-sm font-medium">Piezas por página</p>
             <div className="mt-2 flex flex-wrap gap-2">
-              {PALETAS.map(({ nombre, paleta }) => (
-                <button
-                  key={nombre}
-                  type="button"
-                  onClick={() => cambiar({ paleta: { ...paleta } })}
-                  className={`flex items-center gap-2 rounded-pildora border px-3 py-1.5 text-xs font-medium ${
-                    JSON.stringify(paleta) === JSON.stringify(borrador.paleta)
-                      ? 'border-texto'
-                      : 'border-borde text-texto-secundario hover:text-texto'
-                  }`}
+              {PIEZAS_POR_PAGINA.map((valor) => (
+                <Chip
+                  key={valor}
+                  activo={parametros.piezas_por_pagina === valor}
+                  onClick={() => cambiarParametros({ piezas_por_pagina: valor })}
                 >
-                  <span className="flex">
-                    {[paleta.fondo, paleta.texto, paleta.acento].map((color) => (
-                      <span key={color} className="h-4 w-4 rounded-full border border-borde" style={{ backgroundColor: color }} />
-                    ))}
-                  </span>
-                  {nombre}
-                </button>
-              ))}
-            </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              {(
-                [
-                  ['fondo', 'Fondo'],
-                  ['texto', 'Texto'],
-                  ['acento', 'Acento'],
-                ] as const
-              ).map(([campo, etiqueta]) => (
-                <Campo key={campo} etiqueta={etiqueta}>
-                  <input
-                    type="color"
-                    className="h-10 w-full cursor-pointer p-1"
-                    value={borrador.paleta[campo]}
-                    onChange={(evento) => cambiar({ paleta: { ...borrador.paleta, [campo]: evento.target.value.toUpperCase() } })}
-                  />
-                </Campo>
+                  {valor}
+                </Chip>
               ))}
             </div>
 
-            <label className="mt-5 flex items-center gap-3 text-sm font-medium">
+            <Campo
+              etiqueta={`Tamaño de los títulos (${parametros.escala_titulos.toFixed(2)})`}
+              ayuda="1.00 llena el ancho de la página; menos, títulos más discretos."
+              className="mt-5"
+            >
+              <input
+                type="range"
+                min={0.5}
+                max={1.4}
+                step={0.05}
+                value={parametros.escala_titulos}
+                onChange={(evento) => cambiarParametros({ escala_titulos: Number(evento.target.value) })}
+              />
+            </Campo>
+
+            <div className="mt-4 space-y-2">
+              {(
+                [
+                  ['fotos_a_sangre', 'Fotos hasta el borde de la página'],
+                  ['mostrar_manifiesto', 'Incluir la página del manifiesto'],
+                  ['mostrar_cierre', 'Incluir la página de cierre'],
+                ] as const
+              ).map(([campo, etiqueta]) => (
+                <label key={campo} className="flex items-center gap-3 text-sm font-medium">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4"
+                    checked={parametros[campo]}
+                    onChange={(evento) => cambiarParametros({ [campo]: evento.target.checked } as Partial<ParametrosPlantilla>)}
+                  />
+                  {etiqueta}
+                </label>
+              ))}
+            </div>
+
+            <div className="mt-5">
+              <SelectorPaleta paleta={parametros.paleta} alCambiar={(paleta) => cambiarParametros({ paleta })} />
+            </div>
+          </section>
+
+          <section className="tarjeta p-5">
+            <h2 className="text-xl">Precios, moneda e idioma</h2>
+
+            <label className="mt-4 flex items-center gap-3 text-sm font-medium">
               <input
                 type="checkbox"
                 className="h-4 w-4"
@@ -283,6 +348,74 @@ export function Presentacion() {
             <p className="ml-7 text-xs text-texto-secundario">
               Sin precios, las piezas salen sólo con cantidad y el concentrado final no lleva importes.
             </p>
+
+            <p className="mt-5 text-sm font-medium">Moneda</p>
+            <div className="mt-2 flex flex-wrap items-end gap-3">
+              {(
+                [
+                  ['MXN', 'Pesos'],
+                  ['USD', 'Dólares'],
+                ] as const
+              ).map(([valor, nombre]) => (
+                <Chip
+                  key={valor}
+                  activo={borrador.moneda === valor}
+                  onClick={() =>
+                    cambiar({ moneda: valor, tipo_cambio: valor === 'USD' ? (borrador.tipo_cambio ?? 18) : borrador.tipo_cambio })
+                  }
+                >
+                  {nombre}
+                </Chip>
+              ))}
+              {borrador.moneda === 'USD' && (
+                <Campo etiqueta="Tipo de cambio" ayuda="Pesos por dólar. Se imprime al pie de la propuesta.">
+                  <input
+                    type="number"
+                    min={1}
+                    max={1000}
+                    step={0.01}
+                    className="w-32"
+                    value={borrador.tipo_cambio ?? ''}
+                    onChange={(evento) => cambiar({ tipo_cambio: evento.target.value ? Number(evento.target.value) : null })}
+                  />
+                </Campo>
+              )}
+            </div>
+            {borrador.moneda === 'USD' && !borrador.tipo_cambio && (
+              <Aviso tono="error" className="mt-3">
+                Pon el tipo de cambio para poder guardar en dólares.
+              </Aviso>
+            )}
+
+            <p className="mt-5 text-sm font-medium">Idioma de la propuesta</p>
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              {(
+                [
+                  ['es', 'Español'],
+                  ['en', 'Inglés'],
+                ] as const
+              ).map(([valor, nombre]) => (
+                <Chip key={valor} activo={borrador.idioma === valor} onClick={() => cambiar({ idioma: valor })}>
+                  {nombre}
+                </Chip>
+              ))}
+              {borrador.idioma !== 'es' && (
+                <Boton
+                  variante="secundario"
+                  icono={<Languages className="h-4 w-4" />}
+                  cargando={traducir.isPending}
+                  disabled={ocupado}
+                  onClick={() => void traducirAhora()}
+                >
+                  Traducir con IA
+                </Boton>
+              )}
+            </div>
+            <p className="mt-2 text-xs text-texto-secundario">
+              En inglés se traducen los textos y las medidas pasan a pies y pulgadas. Lo que hayas escrito a mano en la descripción de una
+              partida se imprime tal cual. La traducción se guarda: sólo se paga una vez.
+            </p>
+            {traducidos > 0 && <p className="mt-1 text-xs text-texto-secundario">{traducidos} textos ya traducidos.</p>}
           </section>
 
           <section className="tarjeta p-5">

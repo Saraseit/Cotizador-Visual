@@ -41,6 +41,7 @@ export const etiquetasTipoImagen: Record<TipoImagen, { texto: string; tono: Tono
   generada: { texto: 'Render conceptual', tono: 'conceptual' },
   ambientacion: { texto: 'Ambientación', tono: 'neutro' },
   montaje: { texto: 'Montaje con IA', tono: 'conceptual' },
+  inspiracion: { texto: 'Inspiración', tono: 'neutro' },
 }
 
 export function PildoraTipoImagen({ tipo }: { tipo: TipoImagen }) {

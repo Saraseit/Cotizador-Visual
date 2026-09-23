@@ -93,7 +93,7 @@ def test_la_cotizacion_manda_sobre_la_config_guardada():
 def test_config_invalida_cae_a_la_de_por_defecto():
     detalle = _detalle()
     config = pres.leer_config({"paleta": {"fondo": "rojo"}}, detalle)
-    assert config.paleta.fondo == "#FFFCF7"
+    assert config.parametros.paleta.fondo == "#FFFCF7"
     assert config.evento == "HACIENDA SAN PEDRO"
 
 
@@ -165,7 +165,7 @@ def test_prompt_de_montaje_lleva_piezas_brief_e_indicaciones():
 def test_paleta_oscura_usa_identificadores_crema():
     detalle = _detalle()
     config = pres.config_por_defecto(detalle)
-    config.paleta = Paleta(fondo="#101010", texto="#FFFFFF", acento="#C9A27E")
+    config.parametros.paleta = Paleta(fondo="#101010", texto="#FFFFFF", acento="#C9A27E")
     vistas = pres.secciones_vista(config, detalle)
     contexto = pres.construir_contexto(detalle, config, vistas, {}, set(), {})
     assert contexto["monograma"] == pres.logo("monograma", pres.CREMA)

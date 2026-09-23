@@ -10,8 +10,12 @@ import type {
   CotizacionResumen,
   Imagen,
   ListaPrecios,
+  PaletaEntrada,
+  PaletaGuardada,
+  ParametrosPlantilla,
   PdfGenerado,
   PerfilYo,
+  Plantilla,
   Presentacion,
   ResultadoCargaTexto,
   ResultadoGeneracion,
@@ -108,6 +112,8 @@ export const api = {
     asignarCargo: (cotizacionId: string, itemId: string, cargo: Cargo | null) =>
       peticion<CotizacionDetalle>(`/cotizaciones/${cotizacionId}/items/${itemId}/cargo`, json({ cargo }, 'PUT')),
     pdfs: (cotizacionId: string) => peticion<PdfGenerado[]>(`/cotizaciones/${cotizacionId}/pdfs`),
+    editarDescripcion: (cotizacionId: string, itemId: string, descripcion: string) =>
+      peticion<CotizacionDetalle>(`/cotizaciones/${cotizacionId}/items/${itemId}/descripcion`, json({ descripcion }, 'PATCH')),
   },
   presentacion: {
     obtener: (cotizacionId: string) => peticion<Presentacion>(`/cotizaciones/${cotizacionId}/presentacion`),
@@ -118,6 +124,33 @@ export const api = {
     generarMontaje: (cotizacionId: string, clave: string, indicaciones = '') =>
       peticion<Presentacion>(`/cotizaciones/${cotizacionId}/presentacion/montajes`, json({ clave, indicaciones })),
     pdf: (cotizacionId: string) => peticion<ResultadoPdf>(`/cotizaciones/${cotizacionId}/presentacion/pdf`, { method: 'POST' }),
+    traducir: (cotizacionId: string) => peticion<Presentacion>(`/cotizaciones/${cotizacionId}/presentacion/traducir`, { method: 'POST' }),
+  },
+  plantillas: {
+    listar: () => peticion<Plantilla[]>('/plantillas'),
+    crear: (archivo: File, nombre = '') => {
+      const datos = new FormData()
+      datos.append('archivo', archivo)
+      if (nombre) datos.append('nombre', nombre)
+      return peticion<Plantilla>('/plantillas', { method: 'POST', body: datos })
+    },
+    actualizar: (id: string, cambios: { nombre?: string; descripcion?: string; parametros?: ParametrosPlantilla }) =>
+      peticion<Plantilla>(`/plantillas/${id}`, json(cambios, 'PATCH')),
+    agregarInspiracion: (id: string, archivo: File) => {
+      const datos = new FormData()
+      datos.append('archivo', archivo)
+      return peticion<Plantilla>(`/plantillas/${id}/inspiraciones`, { method: 'POST', body: datos })
+    },
+    quitarInspiracion: (id: string, imagenId: string) =>
+      peticion<Plantilla>(`/plantillas/${id}/inspiraciones/${imagenId}`, { method: 'DELETE' }),
+    analizar: (id: string) => peticion<Plantilla>(`/plantillas/${id}/analizar`, { method: 'POST' }),
+    eliminar: (id: string) => peticion<void>(`/plantillas/${id}`, { method: 'DELETE' }),
+  },
+  paletas: {
+    listar: () => peticion<PaletaGuardada[]>('/paletas'),
+    crear: (entrada: PaletaEntrada) => peticion<PaletaGuardada>('/paletas', json(entrada)),
+    actualizar: (id: string, entrada: PaletaEntrada) => peticion<PaletaGuardada>(`/paletas/${id}`, json(entrada, 'PATCH')),
+    eliminar: (id: string) => peticion<void>(`/paletas/${id}`, { method: 'DELETE' }),
   },
   catalogo: {
     buscar: (termino: string, soloActivos = false) =>
