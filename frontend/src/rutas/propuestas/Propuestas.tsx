@@ -1,4 +1,4 @@
-import { ChevronDown, Download, ExternalLink, FileText, Search, Sparkles } from 'lucide-react'
+import { ChevronDown, Download, ExternalLink, FilePlus, FileText, Pencil, Search, Sparkles } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
@@ -6,7 +6,7 @@ import { useCotizaciones, usePdfsCotizacion } from '@/api/consultas'
 import type { CotizacionResumen, PdfGenerado } from '@/api/tipos'
 import { Aviso, mensajeDeError } from '@/componentes/Aviso'
 import { Boton } from '@/componentes/Boton'
-import { PildoraEstadoCotizacion } from '@/componentes/Pildora'
+import { Pildora, PildoraEstadoCotizacion } from '@/componentes/Pildora'
 import { fechaHora } from '@/lib/formato'
 
 type Filtro = 'todas' | 'revision' | 'generada'
@@ -16,13 +16,17 @@ const ETIQUETA_TIPO: Record<PdfGenerado['tipo'], string> = {
   editorial: 'Presentación editorial',
 }
 
-function FilaPdf({ pdf }: { pdf: PdfGenerado }) {
+function FilaPdf({ pdf, version, vigente }: { pdf: PdfGenerado; version: number; vigente: boolean }) {
   return (
     <li className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3">
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <FileText className="h-4 w-4 shrink-0 text-texto-secundario" aria-hidden />
         <div className="min-w-0">
-          <p className="truncate text-sm font-medium">{ETIQUETA_TIPO[pdf.tipo]}</p>
+          <p className="flex flex-wrap items-center gap-2 truncate text-sm font-medium">
+            {ETIQUETA_TIPO[pdf.tipo]}
+            <span className="text-xs font-normal text-texto-secundario">versión {version}</span>
+            {vigente && <Pildora tono="resuelto">La más reciente</Pildora>}
+          </p>
           <p className="text-xs text-texto-secundario">Generado el {fechaHora(pdf.creado_en)}</p>
         </div>
       </div>
@@ -54,29 +58,65 @@ function FilaPdf({ pdf }: { pdf: PdfGenerado }) {
   )
 }
 
+/**
+ * Historial de PDF de una cotización. Generar no la cierra: siempre se puede seguir editando y
+ * volver a generar, y cada generación queda como una versión más (la de arriba es la vigente).
+ */
 function PanelPdfs({ cotizacionId, estado }: { cotizacionId: string; estado: CotizacionResumen['estado'] }) {
   const consulta = usePdfsCotizacion(cotizacionId)
+  const pdfs = consulta.data ?? []
+
+  // Cada tipo lleva su propia numeración: la más vieja es la versión 1.
+  const versiones = new Map<string, { version: number; vigente: boolean }>()
+  for (const tipo of ['base', 'editorial'] as const) {
+    const delTipo = pdfs.filter((p) => p.tipo === tipo)
+    delTipo.forEach((pdf, indice) => {
+      versiones.set(pdf.id, { version: delTipo.length - indice, vigente: indice === 0 })
+    })
+  }
+
+  const resumen = () => {
+    if (pdfs.length === 0) {
+      return estado === 'revision'
+        ? 'Todavía no se genera ningún PDF: la cotización sigue en revisión.'
+        : 'Todavía no se genera ningún PDF para esta cotización.'
+    }
+    const base = pdfs.filter((p) => p.tipo === 'base').length
+    const editorial = pdfs.length - base
+    const partes = [base && `${base} de la propuesta base`, editorial && `${editorial} de la presentación editorial`]
+    return `${pdfs.length} ${pdfs.length === 1 ? 'versión generada' : 'versiones generadas'}: ${partes.filter(Boolean).join(' y ')}.`
+  }
 
   return (
     <div className="border-t border-borde bg-fondo/50 px-5 py-4">
-      {consulta.isLoading && <p className="text-sm text-texto-secundario">Cargando PDF…</p>}
       {consulta.isError && <Aviso tono="error">{mensajeDeError(consulta.error)}</Aviso>}
-      {consulta.data && consulta.data.length === 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-texto-secundario">
-            {estado === 'revision'
-              ? 'Todavía no se genera ningún PDF: faltan pasos en la revisión.'
-              : 'Todavía no se genera ningún PDF para esta cotización.'}
-          </p>
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-texto-secundario">{consulta.isLoading ? 'Cargando PDF…' : resumen()}</p>
+        {/* Siempre disponibles: generar no bloquea la edición ni obliga a volver a subir el PDF. */}
+        <div className="flex flex-wrap items-center gap-2">
           <Link to={`/cotizaciones/${cotizacionId}`}>
-            <Boton variante="secundario">Continuar cotización</Boton>
+            <Boton variante="secundario" icono={<Pencil className="h-4 w-4" />}>
+              Seguir editando
+            </Boton>
+          </Link>
+          <Link to={`/cotizaciones/${cotizacionId}/generar`}>
+            <Boton variante="secundario" icono={<FilePlus className="h-4 w-4" />}>
+              Generar otra versión
+            </Boton>
           </Link>
         </div>
-      )}
-      {consulta.data && consulta.data.length > 0 && (
-        <ul className="divide-y divide-borde">
-          {consulta.data.map((pdf) => (
-            <FilaPdf key={pdf.id} pdf={pdf} />
+      </div>
+
+      {pdfs.length > 0 && (
+        <ul className="mt-2 divide-y divide-borde">
+          {pdfs.map((pdf) => (
+            <FilaPdf
+              key={pdf.id}
+              pdf={pdf}
+              version={versiones.get(pdf.id)?.version ?? 1}
+              vigente={versiones.get(pdf.id)?.vigente ?? false}
+            />
           ))}
         </ul>
       )}
@@ -214,7 +254,7 @@ export function Propuestas() {
 
       <p className="mt-4 flex items-center gap-2 text-sm text-texto-secundario">
         <Sparkles className="h-4 w-4" />
-        La presentación editorial se arma desde Generar, dentro de cada cotización.
+        Generar no cierra la cotización: puedes seguir editándola y generar otra versión cuando quieras.
       </p>
     </div>
   )

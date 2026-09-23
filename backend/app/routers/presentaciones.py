@@ -18,6 +18,7 @@ from app.db.modelos import (
     ConfigPresentacion,
     ConfigPresentacionEntrada,
     CotizacionDetalle,
+    FormatoPropuesta,
     Imagen,
     PeticionMontaje,
     Presentacion,
@@ -181,6 +182,25 @@ async def guardar_presentacion(
     await _guardar_config(db, cotizacion_id, nueva, usuario)
     presentacion, _, _ = await _armar(db, storage, cotizacion_id)
     return presentacion
+
+
+@router.put("/{cotizacion_id}/presentacion/formato", response_model=Presentacion)
+async def guardar_formato(
+    cotizacion_id: UUID, cuerpo: FormatoPropuesta, usuario: Usuario, db: ClienteDB, storage: StorageDep
+) -> Presentacion:
+    """Moneda e idioma de los dos PDF, sin tocar el resto de la presentación.
+
+    Lo usa Revisar: ahí el vendedor comprueba los importes convertidos y los textos traducidos antes
+    de imprimir, sin tener que entrar al editor de la presentación.
+    """
+    cotizacion = await _fila_cotizacion(db, cotizacion_id, "*")
+    _puede_editar(cotizacion, usuario)
+    presentacion, _, _ = await _armar(db, storage, cotizacion_id)
+    config = presentacion.config
+    config.moneda, config.tipo_cambio, config.idioma = cuerpo.moneda, cuerpo.tipo_cambio, cuerpo.idioma
+    await _guardar_config(db, cotizacion_id, config, usuario)
+    actualizada, _, _ = await _armar(db, storage, cotizacion_id)
+    return actualizada
 
 
 @router.put("/{cotizacion_id}/presentacion/imagenes", response_model=Presentacion)

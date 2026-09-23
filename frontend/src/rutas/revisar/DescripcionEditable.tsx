@@ -10,7 +10,16 @@ import { Boton } from '@/componentes/Boton'
  * nota del vendedor sobre el concepto de esa partida. Si está lleno, es lo que se imprime (y no se
  * manda a traducir, porque es una corrección deliberada).
  */
-export function DescripcionEditable({ item, cotizacionId }: { item: CotizacionItem; cotizacionId: string }) {
+export function DescripcionEditable({
+  item,
+  cotizacionId,
+  traduccion,
+}: {
+  item: CotizacionItem
+  cotizacionId: string
+  /** Traducción guardada para el idioma elegido; se muestra abajo para poder revisarla. */
+  traduccion?: string
+}) {
   const editar = useEditarDescripcion(cotizacionId)
   const [editando, setEditando] = useState(false)
   const [texto, setTexto] = useState('')
@@ -92,6 +101,7 @@ export function DescripcionEditable({ item, cotizacionId }: { item: CotizacionIt
         <Pencil className="ml-1.5 inline h-3.5 w-3.5 align-baseline text-texto-secundario opacity-0 transition-opacity group-hover:opacity-100" />
       </button>
       {editada && <p className="text-xs text-texto-secundario">Editada · el sistema dice: {item.descripcion_origen}</p>}
+      {!editada && traduccion && <p className="text-xs italic text-texto-secundario">{traduccion}</p>}
       {!editada && item.item && item.item.nombre !== item.descripcion_origen && (
         <p className="text-xs text-texto-secundario">Catálogo: {item.item.nombre}</p>
       )}

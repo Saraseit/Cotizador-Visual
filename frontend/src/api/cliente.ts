@@ -5,6 +5,7 @@ import type {
   CatalogoItem,
   ConfigPresentacionEntrada,
   CatalogoItemActualizacion,
+  FormatoPropuesta,
   CatalogoItemEntrada,
   CotizacionDetalle,
   CotizacionResumen,
@@ -125,6 +126,8 @@ export const api = {
       peticion<Presentacion>(`/cotizaciones/${cotizacionId}/presentacion/montajes`, json({ clave, indicaciones })),
     pdf: (cotizacionId: string) => peticion<ResultadoPdf>(`/cotizaciones/${cotizacionId}/presentacion/pdf`, { method: 'POST' }),
     traducir: (cotizacionId: string) => peticion<Presentacion>(`/cotizaciones/${cotizacionId}/presentacion/traducir`, { method: 'POST' }),
+    formato: (cotizacionId: string, formato: FormatoPropuesta) =>
+      peticion<Presentacion>(`/cotizaciones/${cotizacionId}/presentacion/formato`, json(formato, 'PUT')),
   },
   plantillas: {
     listar: () => peticion<Plantilla[]>('/plantillas'),

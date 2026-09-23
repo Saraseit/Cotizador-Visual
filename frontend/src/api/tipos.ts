@@ -228,6 +228,20 @@ export interface PaletaGuardada {
   predefinida: boolean
 }
 
+/** Moneda e idioma de los dos PDF. Se edita desde Revisar y desde el editor de la presentación. */
+export interface FormatoPropuesta {
+  moneda: Moneda
+  tipo_cambio: number | null
+  idioma: Idioma
+}
+
+/** Moneda e idioma de los dos PDF. Se edita desde Revisar y desde el editor de la presentación. */
+export interface FormatoPropuesta {
+  moneda: Moneda
+  tipo_cambio: number | null
+  idioma: Idioma
+}
+
 export interface PaletaEntrada {
   nombre: string
   paleta: Paleta

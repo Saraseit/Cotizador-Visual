@@ -6,6 +6,7 @@ import type {
   CatalogoItemActualizacion,
   ConfigPresentacionEntrada,
   CotizacionDetalle,
+  FormatoPropuesta,
   PaletaEntrada,
   ParametrosPlantilla,
   Presentacion,
@@ -202,6 +203,11 @@ export function useGenerarMontaje(cotizacionId: string) {
       void cliente.invalidateQueries({ queryKey: llaves.resumenBiblioteca })
     },
   })
+}
+
+/** Moneda e idioma, sin tocar el resto de la presentación (se edita también desde Revisar). */
+export function useGuardarFormato(cotizacionId: string) {
+  return useMutacionPresentacion(cotizacionId, (formato: FormatoPropuesta) => api.presentacion.formato(cotizacionId, formato))
 }
 
 export function useTraducirPresentacion(cotizacionId: string) {

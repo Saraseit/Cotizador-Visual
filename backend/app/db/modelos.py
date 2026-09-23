@@ -364,6 +364,24 @@ Moneda = Literal["MXN", "USD"]
 Idioma = Literal["es", "en"]
 
 
+class FormatoPropuesta(BaseModel):
+    """Cómo se imprimen los dos PDF: moneda e idioma.
+
+    Se edita desde Revisar (antes de imprimir) y desde el editor de la presentación; por eso va en su
+    propio cuerpo, para no pisar el resto de la configuración al guardar desde una u otra pantalla.
+    """
+
+    moneda: Moneda = "MXN"
+    tipo_cambio: float | None = Field(None, gt=0, le=1000)
+    idioma: Idioma = "es"
+
+    @model_validator(mode="after")
+    def _tipo_cambio_si_dolares(self) -> "FormatoPropuesta":
+        if self.moneda == "USD" and not self.tipo_cambio:
+            raise ValueError("Para presentar en dólares hace falta el tipo de cambio (pesos por dólar).")
+        return self
+
+
 class ConfigPresentacionEntrada(BaseModel):
     """Cuerpo de PUT /cotizaciones/{id}/presentacion. Las imágenes se asignan aparte, por hueco."""
 

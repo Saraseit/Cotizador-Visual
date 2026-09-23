@@ -20,7 +20,7 @@ from app.routers import (
     usuarios,
 )
 
-VERSION = "0.3.0"
+VERSION = "0.3.1"
 registro = logging.getLogger("cotizador")
 
 

@@ -3,15 +3,16 @@ import { ArrowRight, ImagePlus, RefreshCw } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 
-import { useAsignarCargo, useCotizacion, useReordenar } from '@/api/consultas'
+import { useAsignarCargo, useCotizacion, usePresentacion, useReordenar } from '@/api/consultas'
 import type { Cargo, CotizacionItem } from '@/api/tipos'
 import { Aviso, mensajeDeError } from '@/componentes/Aviso'
 import { Boton } from '@/componentes/Boton'
 import { Miniatura } from '@/componentes/Miniatura'
 import { PildoraEstadoItem } from '@/componentes/Pildora'
-import { cantidad, moneda } from '@/lib/formato'
+import { cantidad, formatoDinero } from '@/lib/formato'
 
 import { DescripcionEditable } from './DescripcionEditable'
+import { FormatoPropuesta } from './FormatoPropuesta'
 import { SelectorImagen } from './SelectorImagen'
 import { TablaOrdenable } from './TablaOrdenable'
 
@@ -44,10 +45,15 @@ export function Revisar() {
   const fotosImportadas = (useLocation().state as { fotosImportadas?: number } | null)?.fotosImportadas ?? 0
   const [filtro, setFiltro] = useState<Filtro>('pendientes')
   const [itemAbierto, setItemAbierto] = useState<CotizacionItem | null>(null)
+  const presentacion = usePresentacion(id)
   const reordenar = useReordenar(id ?? '')
   const asignarCargo = useAsignarCargo(id ?? '')
 
   const cotizacion = consulta.data
+  // Moneda e idioma salen de la presentación: la tabla muestra lo mismo que va a imprimir el PDF.
+  const config = presentacion.data?.config
+  const dinero = formatoDinero(config?.moneda ?? 'MXN', config?.tipo_cambio ?? null)
+  const traducciones = config && config.idioma !== 'es' ? config.traducciones : {}
   const pendientes = cotizacion?.items_pendientes ?? 0
   const total = cotizacion?.total_items ?? 0
   const resueltos = total - pendientes
@@ -81,7 +87,9 @@ export function Revisar() {
       }),
       columna.accessor('descripcion_origen', {
         header: 'Descripción',
-        cell: ({ row }) => <DescripcionEditable item={row.original} cotizacionId={id ?? ''} />,
+        cell: ({ row }) => (
+          <DescripcionEditable item={row.original} cotizacionId={id ?? ''} traduccion={traducciones[row.original.descripcion_origen]} />
+        ),
       }),
       columna.accessor('cantidad', {
         header: () => <span className="block text-right">Cantidad</span>,
@@ -89,7 +97,7 @@ export function Revisar() {
       }),
       columna.accessor('precio_unitario', {
         header: () => <span className="block text-right">Precio</span>,
-        cell: ({ getValue }) => <span className="block text-right tabular-nums">{moneda(getValue())}</span>,
+        cell: ({ getValue }) => <span className="block text-right tabular-nums">{dinero(getValue())}</span>,
       }),
       columna.accessor('estado', {
         header: 'Estado',
@@ -123,7 +131,9 @@ export function Revisar() {
         },
       }),
     ],
-    [mutarCargo, cambiandoCargo, id],
+    // `dinero` y `traducciones` dependen de la moneda y el idioma elegidos.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [mutarCargo, cambiandoCargo, id, config?.moneda, config?.tipo_cambio, config?.idioma, traducciones],
   )
 
   const tabla = useReactTable({
@@ -184,7 +194,7 @@ export function Revisar() {
           <p className="text-sm text-texto-secundario">Paso 2 · Revisar imágenes</p>
           <h1 className="mt-1 text-3xl">{cotizacion.nombre_cliente}</h1>
           <p className="mt-1 text-texto-secundario">
-            Referencia {cotizacion.referencia_externa || 'sin referencia'} · {total} ítems · total {moneda(cotizacion.total)}
+            Referencia {cotizacion.referencia_externa || 'sin referencia'} · {total} ítems · total {dinero(cotizacion.total)}
             {cotizacion.iva === null && ' más IVA'}
           </p>
         </div>
@@ -318,7 +328,7 @@ export function Revisar() {
                       </p>
                       {item.codigo_origen && <p className="text-xs text-texto-secundario">{item.codigo_origen}</p>}
                     </div>
-                    <span className="tabular-nums">{moneda(item.importe)}</span>
+                    <span className="tabular-nums">{dinero(item.importe)}</span>
                     <SelectorTipo item={item} ocupado={cambiandoCargo} alCambiar={(cargo) => mutarCargo({ itemId: item.id, cargo })} />
                   </li>
                 ))}
@@ -326,23 +336,27 @@ export function Revisar() {
             )}
           </section>
 
-          <section className="tarjeta p-5" aria-label="Totales de la propuesta">
-            <dl className="space-y-2 text-sm">
-              {totales.map(([nombre, valor]) => (
-                <div key={nombre} className="flex justify-between gap-4">
-                  <dt className="text-texto-secundario">{nombre}</dt>
-                  <dd className="tabular-nums">{moneda(valor)}</dd>
+          <div className="space-y-6">
+            {config && <FormatoPropuesta cotizacionId={id ?? ''} config={config} />}
+
+            <section className="tarjeta p-5" aria-label="Totales de la propuesta">
+              <dl className="space-y-2 text-sm">
+                {totales.map(([nombre, valor]) => (
+                  <div key={nombre} className="flex justify-between gap-4">
+                    <dt className="text-texto-secundario">{nombre}</dt>
+                    <dd className="tabular-nums">{dinero(valor)}</dd>
+                  </div>
+                ))}
+                <div className="flex justify-between gap-4 border-t border-borde pt-2 text-base font-semibold">
+                  <dt>
+                    Total
+                    {cotizacion.iva === null && <span className="font-normal text-texto-secundario"> (más IVA)</span>}
+                  </dt>
+                  <dd className="tabular-nums">{dinero(cotizacion.total)}</dd>
                 </div>
-              ))}
-              <div className="flex justify-between gap-4 border-t border-borde pt-2 text-base font-semibold">
-                <dt>
-                  Total
-                  {cotizacion.iva === null && <span className="font-normal text-texto-secundario"> (más IVA)</span>}
-                </dt>
-                <dd className="tabular-nums">{moneda(cotizacion.total)}</dd>
-              </div>
-            </dl>
-          </section>
+              </dl>
+            </section>
+          </div>
         </div>
       )}
 
