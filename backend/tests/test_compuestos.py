@@ -233,3 +233,29 @@ def test_presentacion_usa_el_importe_presentado():
     config = pres.config_por_defecto(detalle)
     vistas = pres.secciones_vista(config, detalle)
     assert vistas[1].importe == 2000
+
+
+def test_la_lista_de_propuestas_trae_el_cuadre():
+    from app.routers.cotizaciones import _resumen_desde_fila
+
+    cotizacion, cubierta, base, compuesto = (str(uuid4()) for _ in range(4))
+
+    def partida(item_id, precio, orden):
+        return {"id": item_id, "imagen_id": None, "cargo": None, "compuesto_id": compuesto, "cantidad": "10",
+                "precio_unitario": precio, "orden": orden, "tipo_item": "catalogo"}
+
+    fila = {
+        "id": cotizacion, "nombre_cliente": "X", "referencia_externa": "R", "creado_por": cotizacion,
+        "creado_en": "2026-10-01T00:00:00Z", "actualizado_en": "2026-10-01T00:00:00Z",
+        "iva_documento": "432.00", "subtotal_documento": "2700.00",
+        "cotizacion_items": [partida(cubierta, "150", 0), partida(base, "120", 1)],
+        "cotizacion_compuestos": [
+            {"id": compuesto, "nombre": "MESA COMPLETA", "imagen_id": None, "precio_modo": "partida", "precio_item_id": cubierta,
+             "precio_manual": None}
+        ],
+    }
+    resumen = _resumen_desde_fila(fila)
+    assert not resumen.cuadre.cuadra and resumen.cuadre.diferencia == -1392  # (1,500 + IVA) contra (2,700 + IVA)
+    assert [a.nombre for a in resumen.cuadre.ajustes] == ["MESA COMPLETA"]
+    fila["cotizacion_compuestos"][0]["precio_modo"] = "suma"
+    assert _resumen_desde_fila(fila).cuadre.cuadra

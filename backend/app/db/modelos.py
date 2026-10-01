@@ -260,6 +260,8 @@ class CotizacionResumen(BaseModel):
     actualizado_en: datetime
     total_items: int = 0
     items_pendientes: int = 0
+    # Total de la propuesta contra el del PDF del sistema (también en la lista de Propuestas).
+    cuadre: Cuadre = Field(default_factory=Cuadre)
 
 
 class CotizacionDetalle(CotizacionResumen):
@@ -273,7 +275,6 @@ class CotizacionDetalle(CotizacionResumen):
     total: float = 0
     # Sólo al crear: cuántas fotos nuevas del PDF se guardaron en la biblioteca.
     fotos_importadas: int = 0
-    cuadre: Cuadre = Field(default_factory=Cuadre)
 
 
 class Reordenar(BaseModel):

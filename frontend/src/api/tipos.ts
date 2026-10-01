@@ -221,6 +221,8 @@ export interface CotizacionResumen {
   actualizado_en: string
   total_items: number
   items_pendientes: number
+  /** Total de la propuesta contra el del PDF del sistema (también en la lista de Propuestas). */
+  cuadre: Cuadre
 }
 
 export interface CotizacionDetalle extends CotizacionResumen {
@@ -234,7 +236,6 @@ export interface CotizacionDetalle extends CotizacionResumen {
   total: number
   /** Sólo en la respuesta de subir: fotos nuevas del PDF guardadas en la biblioteca. */
   fotos_importadas?: number
-  cuadre: Cuadre
 }
 
 // --- Presentación editorial --------------------------------------------------

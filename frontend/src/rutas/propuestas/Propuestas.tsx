@@ -5,11 +5,12 @@ import { Link } from 'react-router-dom'
 import { useCotizaciones, usePdfsCotizacion } from '@/api/consultas'
 import type { CotizacionResumen, PdfGenerado } from '@/api/tipos'
 import { Aviso, mensajeDeError } from '@/componentes/Aviso'
+import { AvisoCuadre } from '@/componentes/AvisoCuadre'
 import { Boton } from '@/componentes/Boton'
 import { Pildora, PildoraEstadoCotizacion } from '@/componentes/Pildora'
-import { fechaHora } from '@/lib/formato'
+import { fechaHora, moneda } from '@/lib/formato'
 
-type Filtro = 'todas' | 'revision' | 'generada'
+type Filtro = 'todas' | 'revision' | 'generada' | 'no_cuadran'
 
 const ETIQUETA_TIPO: Record<PdfGenerado['tipo'], string> = {
   base: 'Propuesta',
@@ -62,7 +63,8 @@ function FilaPdf({ pdf, version, vigente }: { pdf: PdfGenerado; version: number;
  * Historial de PDF de una cotización. Generar no la cierra: siempre se puede seguir editando y
  * volver a generar, y cada generación queda como una versión más (la de arriba es la vigente).
  */
-function PanelPdfs({ cotizacionId, estado }: { cotizacionId: string; estado: CotizacionResumen['estado'] }) {
+function PanelPdfs({ cotizacion }: { cotizacion: CotizacionResumen }) {
+  const { id: cotizacionId, estado } = cotizacion
   const consulta = usePdfsCotizacion(cotizacionId)
   const pdfs = consulta.data ?? []
 
@@ -89,6 +91,7 @@ function PanelPdfs({ cotizacionId, estado }: { cotizacionId: string; estado: Cot
 
   return (
     <div className="border-t border-borde bg-fondo/50 px-5 py-4">
+      <AvisoCuadre cuadre={cotizacion.cuadre} className="mb-4" />
       {consulta.isError && <Aviso tono="error">{mensajeDeError(consulta.error)}</Aviso>}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -143,6 +146,7 @@ export function Propuestas() {
       todas: todas.length,
       revision: todas.filter((c) => c.estado === 'revision').length,
       generada: todas.filter((c) => c.estado === 'generada').length,
+      no_cuadran: todas.filter((c) => !c.cuadre.cuadra).length,
     }),
     [todas],
   )
@@ -150,7 +154,8 @@ export function Propuestas() {
   const filas = useMemo(() => {
     const termino = busqueda.trim().toLowerCase()
     return todas.filter((c) => {
-      if (filtro !== 'todas' && c.estado !== filtro) return false
+      if (filtro === 'no_cuadran' && c.cuadre.cuadra) return false
+      if ((filtro === 'revision' || filtro === 'generada') && c.estado !== filtro) return false
       if (!termino) return true
       return c.nombre_cliente.toLowerCase().includes(termino) || c.referencia_externa.toLowerCase().includes(termino)
     })
@@ -173,6 +178,8 @@ export function Propuestas() {
               ['todas', `Todas (${conteos.todas})`],
               ['revision', `En revisión (${conteos.revision})`],
               ['generada', `Generadas (${conteos.generada})`],
+              // Sólo aparece si hay alguna: es una alerta, no un estado normal.
+              ...(conteos.no_cuadran > 0 || filtro === 'no_cuadran' ? ([['no_cuadran', `No cuadran (${conteos.no_cuadran})`]] as const) : []),
             ] as const
           ).map(([valor, texto]) => (
             <button
@@ -183,8 +190,12 @@ export function Propuestas() {
               onClick={() => setFiltro(valor)}
               className={`min-h-boton rounded-pildora border px-4 text-sm font-medium transition-colors ${
                 filtro === valor
-                  ? 'border-texto bg-texto text-superficie'
-                  : 'border-borde bg-superficie text-texto-secundario hover:text-texto'
+                  ? valor === 'no_cuadran'
+                    ? 'border-alerta-texto bg-alerta-texto text-superficie'
+                    : 'border-texto bg-texto text-superficie'
+                  : valor === 'no_cuadran'
+                    ? 'border-alerta-borde bg-alerta-fondo text-alerta-texto'
+                    : 'border-borde bg-superficie text-texto-secundario hover:text-texto'
               }`}
             >
               {texto}
@@ -239,14 +250,23 @@ export function Propuestas() {
                     {cotizacion.referencia_externa || 'Sin referencia'} · {fechaHora(cotizacion.creado_en)} · {cotizacion.total_items} ítems
                   </p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  {!cotizacion.cuadre.cuadra && (
+                    <span
+                      className="rounded-pildora border border-alerta-borde bg-alerta-fondo px-2.5 py-0.5 text-xs font-semibold text-alerta-texto"
+                      title="El total de la propuesta no es el del PDF del sistema. Ábrela para ver por qué."
+                    >
+                      No cuadra con el PDF · {cotizacion.cuadre.diferencia > 0 ? '+' : '−'}
+                      {moneda(Math.abs(cotizacion.cuadre.diferencia))}
+                    </span>
+                  )}
                   {cotizacion.items_pendientes > 0 && (
                     <span className="text-sm text-pendiente-texto">{cotizacion.items_pendientes} sin imagen</span>
                   )}
                   <PildoraEstadoCotizacion estado={cotizacion.estado} />
                 </div>
               </button>
-              {abierta && <PanelPdfs cotizacionId={cotizacion.id} estado={cotizacion.estado} />}
+              {abierta && <PanelPdfs cotizacion={cotizacion} />}
             </div>
           )
         })}

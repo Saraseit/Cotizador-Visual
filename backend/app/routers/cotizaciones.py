@@ -46,8 +46,8 @@ Config = Annotated[Configuracion, Depends(obtener_configuracion)]
 
 SELECT_DETALLE = "*, cotizacion_items(*, imagen:imagenes(*), item:catalogo_items(*))"
 SELECT_RESUMEN = (
-    "*, cotizacion_items(id, imagen_id, cargo, compuesto_id),"
-    " cotizacion_compuestos!cotizacion_compuestos_cotizacion_id_fkey(id, imagen_id)"
+    "*, cotizacion_items(id, imagen_id, cargo, compuesto_id, cantidad, precio_unitario, orden, tipo_item),"
+    " cotizacion_compuestos!cotizacion_compuestos_cotizacion_id_fkey(id, nombre, imagen_id, precio_modo, precio_item_id, precio_manual)"
 )
 
 
@@ -83,7 +83,46 @@ def _resumen_desde_fila(fila: dict[str, Any]) -> CotizacionResumen:
         **datos,
         total_items=len(items),
         items_pendientes=sum(1 for i in items if not con_imagen(i)),
+        cuadre=_cuadre_de_fila(fila),
     )
+
+
+def _cuadre_de_fila(fila: dict[str, Any]) -> Any:
+    """El mismo cuadre que el detalle, con lo mínimo de cada partida y compuesto (lista de Propuestas)."""
+    cotizacion_id = fila["id"]
+    compuestos = [
+        Compuesto(
+            cotizacion_id=cotizacion_id,
+            **{k: v for k, v in c.items() if k in ("id", "nombre", "imagen_id", "precio_modo", "precio_item_id", "precio_manual") and v is not None},
+        )
+        for c in fila.get("cotizacion_compuestos") or []
+    ]
+    ids_compuestos = {str(c.id) for c in compuestos}
+    items = []
+    for crudo in fila.get("cotizacion_items") or []:
+        cantidad = float(crudo.get("cantidad") or 0)
+        precio = float(crudo.get("precio_unitario") or 0)
+        compuesto_id = crudo.get("compuesto_id") if str(crudo.get("compuesto_id")) in ids_compuestos else None
+        items.append(
+            CotizacionItem(
+                id=crudo["id"],
+                cotizacion_id=cotizacion_id,
+                cantidad=cantidad,
+                precio_unitario=precio,
+                orden=crudo.get("orden") or 0,
+                tipo_item=crudo.get("tipo_item") or "catalogo",
+                cargo=crudo.get("cargo"),
+                compuesto_id=compuesto_id,
+                importe=round(cantidad * precio, 2),
+            )
+        )
+    for compuesto in compuestos:
+        compuesto.item_ids = [i.id for i in items if i.compuesto_id == compuesto.id]
+    activos = [c for c in compuestos if c.item_ids]
+    iva_documento = float(fila["iva_documento"]) if fila.get("iva_documento") is not None else None
+    subtotal_documento = float(fila["subtotal_documento"]) if fila.get("subtotal_documento") is not None else None
+    total = servicio_compuestos.totales(items, activos, iva_documento)["total"]
+    return servicio_compuestos.cuadre(items, activos, float(total or 0), subtotal_documento, iva_documento)
 
 
 async def compuestos_crudos(db: Any, cotizacion_id: UUID | str) -> list[dict[str, Any]]:
