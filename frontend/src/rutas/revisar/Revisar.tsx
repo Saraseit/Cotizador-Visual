@@ -1,16 +1,17 @@
 import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table'
-import { ArrowRight, ImagePlus, RefreshCw } from 'lucide-react'
+import { ArrowRight, Combine, ImagePlus, Layers, RefreshCw } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 
 import { useAsignarCargo, useCotizacion, usePresentacion, useReordenar } from '@/api/consultas'
-import type { Cargo, CotizacionItem } from '@/api/tipos'
+import type { Cargo, Compuesto, CotizacionItem } from '@/api/tipos'
 import { Aviso, mensajeDeError } from '@/componentes/Aviso'
 import { Boton } from '@/componentes/Boton'
 import { Miniatura } from '@/componentes/Miniatura'
 import { PildoraEstadoItem } from '@/componentes/Pildora'
 import { cantidad, formatoDinero } from '@/lib/formato'
 
+import { CombinarArticulos, EditorCompuesto, type PestanaCompuesto } from './ArticuloCompuesto'
 import { DescripcionEditable } from './DescripcionEditable'
 import { FormatoPropuesta } from './FormatoPropuesta'
 import { SelectorImagen } from './SelectorImagen'
@@ -26,7 +27,8 @@ function SelectorTipo({ item, alCambiar, ocupado }: { item: CotizacionItem; alCa
     <select
       aria-label={`Tipo de ${item.descripcion_origen}`}
       value={item.cargo ?? ''}
-      disabled={ocupado}
+      // Una partida de un artículo compuesto no puede volverse flete o montaje sin separarla antes.
+      disabled={ocupado || Boolean(item.compuesto_id)}
       onChange={(e) => alCambiar((e.target.value || null) as Cargo | null)}
       className="min-w-[7.5rem]"
     >
@@ -45,6 +47,10 @@ export function Revisar() {
   const fotosImportadas = (useLocation().state as { fotosImportadas?: number } | null)?.fotosImportadas ?? 0
   const [filtro, setFiltro] = useState<Filtro>('pendientes')
   const [itemAbierto, setItemAbierto] = useState<CotizacionItem | null>(null)
+  // Partidas marcadas para combinarlas en un artículo compuesto.
+  const [seleccion, setSeleccion] = useState<Set<string>>(new Set())
+  const [combinando, setCombinando] = useState(false)
+  const [compuestoAbierto, setCompuestoAbierto] = useState<{ id: string; pestana: PestanaCompuesto } | null>(null)
   const presentacion = usePresentacion(id)
   const reordenar = useReordenar(id ?? '')
   const asignarCargo = useAsignarCargo(id ?? '')
@@ -65,6 +71,17 @@ export function Revisar() {
     return filtro === 'pendientes' ? partidas.filter((i) => i.estado === 'falta_imagen') : partidas
   }, [cotizacion, filtro])
   const cargos = useMemo(() => (cotizacion?.items ?? []).filter((i) => i.cargo), [cotizacion])
+  const compuestos = useMemo(() => new Map((cotizacion?.compuestos ?? []).map((c) => [c.id, c])), [cotizacion])
+  const partidasDe = (compuesto: Compuesto) =>
+    (cotizacion?.items ?? []).filter((i) => i.compuesto_id === compuesto.id).sort((a, b) => a.orden - b.orden)
+
+  const alternarSeleccion = (itemId: string) =>
+    setSeleccion((actual) => {
+      const nueva = new Set(actual)
+      if (nueva.has(itemId)) nueva.delete(itemId)
+      else nueva.add(itemId)
+      return nueva
+    })
 
   const { mutate: mutarCargo, isPending: cambiandoCargo } = asignarCargo
   const columnas = useMemo(
@@ -72,9 +89,29 @@ export function Revisar() {
       columna.display({
         id: 'miniatura',
         header: 'Imagen',
-        cell: ({ row }) => (
-          <Miniatura url={row.original.imagen?.url} conceptual={row.original.es_render_conceptual} alt={row.original.descripcion_origen} />
-        ),
+        cell: ({ row }) => {
+          // La casilla marca la partida para combinarla en un artículo compuesto.
+          // Las partidas de un compuesto se imprimen con la foto del compuesto.
+          const compuesto = row.original.compuesto_id ? compuestos.get(row.original.compuesto_id) : undefined
+          return (
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-acento"
+                checked={seleccion.has(row.original.id)}
+                disabled={Boolean(compuesto)}
+                onChange={() => alternarSeleccion(row.original.id)}
+                aria-label={`Marcar ${row.original.descripcion_origen} para combinar`}
+                title={compuesto ? 'Ya es parte de un artículo compuesto' : 'Marcar para combinar en un artículo'}
+              />
+              {compuesto ? (
+                <Miniatura url={compuesto.imagen?.url} conceptual={compuesto.imagen?.tipo === 'generada'} alt={compuesto.nombre} />
+              ) : (
+                <Miniatura url={row.original.imagen?.url} conceptual={row.original.es_render_conceptual} alt={row.original.descripcion_origen} />
+              )}
+            </div>
+          )
+        },
       }),
       columna.accessor('codigo_origen', {
         header: 'Código',
@@ -87,9 +124,25 @@ export function Revisar() {
       }),
       columna.accessor('descripcion_origen', {
         header: 'Descripción',
-        cell: ({ row }) => (
-          <DescripcionEditable item={row.original} cotizacionId={id ?? ''} traduccion={traducciones[row.original.descripcion_origen]} />
-        ),
+        cell: ({ row }) => {
+          const compuesto = row.original.compuesto_id ? compuestos.get(row.original.compuesto_id) : undefined
+          return (
+            <>
+              <DescripcionEditable item={row.original} cotizacionId={id ?? ''} traduccion={traducciones[row.original.descripcion_origen]} />
+              {compuesto && (
+                <button
+                  type="button"
+                  onClick={() => setCompuestoAbierto({ id: compuesto.id, pestana: 'fotos' })}
+                  className="mt-1 flex max-w-md items-center gap-1 text-left text-xs text-acento hover:underline"
+                  title="Parte de un artículo compuesto"
+                >
+                  <Layers className="h-3 w-3 shrink-0" aria-hidden />
+                  <span>Parte de {compuesto.nombre}</span>
+                </button>
+              )}
+            </>
+          )
+        },
       }),
       columna.accessor('cantidad', {
         header: () => <span className="block text-right">Cantidad</span>,
@@ -119,6 +172,18 @@ export function Revisar() {
         header: '',
         cell: ({ row }) => {
           const falta = row.original.estado === 'falta_imagen'
+          if (row.original.compuesto_id) {
+            const compuestoId = row.original.compuesto_id
+            return (
+              <Boton
+                variante={falta ? 'primario' : 'secundario'}
+                icono={<Layers className="h-4 w-4" />}
+                onClick={() => setCompuestoAbierto({ id: compuestoId, pestana: 'fotos' })}
+              >
+                Compuesto
+              </Boton>
+            )
+          }
           return (
             <Boton
               variante={falta ? 'primario' : 'secundario'}
@@ -133,7 +198,7 @@ export function Revisar() {
     ],
     // `dinero` y `traducciones` dependen de la moneda y el idioma elegidos.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [mutarCargo, cambiandoCargo, id, config?.moneda, config?.tipo_cambio, config?.idioma, traducciones],
+    [mutarCargo, cambiandoCargo, id, config?.moneda, config?.tipo_cambio, config?.idioma, traducciones, seleccion, compuestos],
   )
 
   const tabla = useReactTable({
@@ -158,6 +223,9 @@ export function Revisar() {
   }
 
   const porcentaje = total === 0 ? 0 : Math.round((resueltos / total) * 100)
+  const seleccionadas = cotizacion.items
+    .filter((i) => seleccion.has(i.id) && !i.cargo && !i.compuesto_id)
+    .sort((a, b) => a.orden - b.orden)
   const columnasVisibles = tabla.getVisibleLeafColumns().length
   const ordenando = filtro === 'todos' && filas.length > 0
 
@@ -306,6 +374,38 @@ export function Revisar() {
         )}
       </div>
 
+      {cotizacion.compuestos.length > 0 && (
+        <section className="tarjeta mt-6 p-5" aria-labelledby="titulo-compuestos">
+          <h2 id="titulo-compuestos" className="text-base font-semibold">
+            Artículos compuestos
+          </h2>
+          <p className="mt-1 text-sm text-texto-secundario">
+            En la propuesta cada uno sale como un solo artículo, con su foto y su nombre, y debajo sus partidas. Precios y totales no cambian.
+          </p>
+          <ul className="mt-4 divide-y divide-borde">
+            {cotizacion.compuestos.map((compuesto) => {
+              const partidas = partidasDe(compuesto)
+              return (
+                <li key={compuesto.id} className="flex flex-wrap items-center gap-4 py-3 text-sm">
+                  <Miniatura url={compuesto.imagen?.url} conceptual={compuesto.imagen?.tipo === 'generada'} alt={compuesto.nombre} />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium">{compuesto.nombre}</p>
+                    <p className="truncate text-xs text-texto-secundario">
+                      {partidas.map((p) => `${cantidad(p.cantidad)} × ${p.codigo_origen || p.descripcion_origen}`).join(' + ')}
+                    </p>
+                  </div>
+                  <span className="tabular-nums">{dinero(partidas.reduce((suma, p) => suma + p.importe, 0))}</span>
+                  <PildoraEstadoItem estado={compuesto.estado} />
+                  <Boton variante="secundario" icono={<Layers className="h-4 w-4" />} onClick={() => setCompuestoAbierto({ id: compuesto.id, pestana: 'fotos' })}>
+                    Editar
+                  </Boton>
+                </li>
+              )
+            })}
+          </ul>
+        </section>
+      )}
+
       {filtro === 'todos' && (
         <div className="mt-6 grid gap-6 md:grid-cols-[1fr_20rem]">
           <section className="tarjeta p-5" aria-labelledby="titulo-cargos">
@@ -362,16 +462,62 @@ export function Revisar() {
 
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-borde bg-superficie/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-          <p className="text-sm text-texto-secundario">
-            {pendientes > 0
-              ? `${pendientes} ítem${pendientes === 1 ? '' : 's'} sin imagen saldrá${pendientes === 1 ? '' : 'n'} con el marcador "Sin imagen".`
-              : 'Todo listo para generar la propuesta.'}
-          </p>
-          <Boton icono={<ArrowRight className="h-4 w-4" />} onClick={() => navegar(`/cotizaciones/${cotizacion.id}/generar`)}>
-            Generar propuesta
-          </Boton>
+          {seleccionadas.length > 0 ? (
+            <>
+              <p className="text-sm text-texto-secundario">
+                {seleccionadas.length === 1
+                  ? '1 partida marcada. Marca al menos otra para combinarlas en un artículo.'
+                  : `${seleccionadas.length} partidas marcadas.`}
+              </p>
+              <div className="flex gap-2">
+                <Boton variante="fantasma" onClick={() => setSeleccion(new Set())}>
+                  Desmarcar
+                </Boton>
+                <Boton icono={<Combine className="h-4 w-4" />} disabled={seleccionadas.length < 2} onClick={() => setCombinando(true)}>
+                  Combinar en un artículo
+                </Boton>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-texto-secundario">
+                {pendientes > 0
+                  ? `${pendientes} ítem${pendientes === 1 ? '' : 's'} sin imagen saldrá${pendientes === 1 ? '' : 'n'} con el marcador "Sin imagen".`
+                  : 'Todo listo para generar la propuesta.'}
+              </p>
+              <Boton icono={<ArrowRight className="h-4 w-4" />} onClick={() => navegar(`/cotizaciones/${cotizacion.id}/generar`)}>
+                Generar propuesta
+              </Boton>
+            </>
+          )}
         </div>
       </div>
+
+      {combinando && (
+        <CombinarArticulos
+          cotizacionId={cotizacion.id}
+          partidas={seleccionadas}
+          dinero={dinero}
+          alCerrar={() => setCombinando(false)}
+          alCombinar={(compuestoId, siguiente) => {
+            setCombinando(false)
+            setSeleccion(new Set())
+            if (siguiente) setCompuestoAbierto({ id: compuestoId, pestana: siguiente })
+          }}
+        />
+      )}
+
+      {compuestoAbierto && compuestos.get(compuestoAbierto.id) && (
+        <EditorCompuesto
+          key={compuestoAbierto.id}
+          cotizacionId={cotizacion.id}
+          compuesto={compuestos.get(compuestoAbierto.id) as Compuesto}
+          partidas={partidasDe(compuestos.get(compuestoAbierto.id) as Compuesto)}
+          dinero={dinero}
+          pestanaInicial={compuestoAbierto.pestana}
+          alCerrar={() => setCompuestoAbierto(null)}
+        />
+      )}
 
       {itemAbierto && (
         <SelectorImagen

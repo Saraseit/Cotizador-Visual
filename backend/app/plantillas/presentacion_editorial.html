@@ -100,6 +100,15 @@
   </style>
 </head>
 <body>
+{# Cifras de una pieza. Un artículo compuesto cuyas partidas no traen la misma cantidad no tiene
+   cantidad ni precio por pieza: sólo su importe (sus partidas van listadas arriba). #}
+{% macro cifras(p, unitario=True) -%}
+  {%- if p.cantidad -%}
+    <p class="cifras">{{ p.cantidad }} {{ t.pieza if p.cantidad == '1' else t.piezas }}{% if mostrar_precios %}{% if unitario %} · {{ p.precio_unitario }} {{ t.cada_uno }}{% endif %} · {{ p.importe }}{% endif %}</p>
+  {%- elif mostrar_precios -%}
+    <p class="cifras">{{ p.importe }}</p>
+  {%- endif -%}
+{%- endmacro %}
 
 {% set sangre = parametros.fotos_a_sangre %}
 {% set margen_foto = 0 if sangre else 40 %}
@@ -241,8 +250,9 @@
         <div class="ficha" style="left: 90pt; top: 760pt; width: 630pt; text-align: center;">
           <p class="nombre">{{ p.nombre }}</p>
           {% if p.detalle %}<p class="detalle">{{ p.detalle }}</p>{% endif %}
+{% if p.componentes %}<p class="detalle">{{ p.componentes|join(" · ") }}</p>{% endif %}
           {% if p.medidas %}<p class="medidas">{{ p.medidas }}</p>{% endif %}
-          <p class="cifras">{{ p.cantidad }} {{ t.pieza if p.cantidad == '1' else t.piezas }}{% if mostrar_precios %} · {{ p.precio_unitario }} {{ t.cada_uno }} · {{ p.importe }}{% endif %}</p>
+          {{ cifras(p) }}
         </div>
 
       {% elif pagina.formato == 'par' %}
@@ -258,8 +268,9 @@
           <div class="ficha" style="left: {{ 40 if arriba else 440 }}pt; top: {{ 200 if arriba else 690 }}pt; width: 330pt; text-align: {{ 'right' if arriba else 'left' }};">
             <p class="nombre">{{ p.nombre }}</p>
             {% if p.detalle %}<p class="detalle">{{ p.detalle }}</p>{% endif %}
+{% if p.componentes %}<p class="detalle">{{ p.componentes|join(" · ") }}</p>{% endif %}
             {% if p.medidas %}<p class="medidas">{{ p.medidas }}</p>{% endif %}
-            <p class="cifras">{{ p.cantidad }} {{ t.pieza if p.cantidad == '1' else t.piezas }}{% if mostrar_precios %} · {{ p.precio_unitario }} {{ t.cada_uno }} · {{ p.importe }}{% endif %}</p>
+            {{ cifras(p) }}
           </div>
         {% endfor %}
 
@@ -275,8 +286,9 @@
           <div class="ficha" style="left: {{ x }}pt; top: {{ y + 234 }}pt; width: 230pt;">
             <p class="nombre">{{ p.nombre }}</p>
             {% if p.detalle %}<p class="detalle">{{ p.detalle }}</p>{% endif %}
+{% if p.componentes %}<p class="detalle">{{ p.componentes|join(" · ") }}</p>{% endif %}
             {% if p.medidas %}<p class="medidas">{{ p.medidas }}</p>{% endif %}
-            <p class="cifras">{{ p.cantidad }} {{ t.pieza if p.cantidad == '1' else t.piezas }}{% if mostrar_precios %} · {{ p.importe }}{% endif %}</p>
+            {{ cifras(p, unitario=False) }}
           </div>
         {% endfor %}
 
@@ -292,7 +304,8 @@
           <div class="ficha" style="left: {{ x }}pt; top: {{ y + 334 }}pt; width: 345pt;">
             <p class="nombre">{{ p.nombre }}</p>
             {% if p.detalle %}<p class="detalle">{{ p.detalle }}</p>{% endif %}
-            <p class="cifras">{{ p.cantidad }} {{ t.pieza if p.cantidad == '1' else t.piezas }}{% if mostrar_precios %} · {{ p.precio_unitario }} {{ t.cada_uno }} · {{ p.importe }}{% endif %}</p>
+{% if p.componentes %}<p class="detalle">{{ p.componentes|join(" · ") }}</p>{% endif %}
+            {{ cifras(p) }}
           </div>
         {% endfor %}
       {% endif %}

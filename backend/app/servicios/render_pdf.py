@@ -10,7 +10,7 @@ import asyncio
 import base64
 import os
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
@@ -19,8 +19,14 @@ from typing import Any
 from fastapi import HTTPException, status
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from app.db.modelos import ConfigPresentacion, CotizacionDetalle, descripcion_impresa
+from app.db.modelos import (
+    ConfigPresentacion,
+    CotizacionDetalle,
+    CotizacionItem,
+    descripcion_impresa,
+)
 from app.servicios import idiomas
+from app.servicios.compuestos import Renglon, categoria_efectiva, renglones
 
 DIR_PLANTILLAS = Path(__file__).resolve().parent.parent / "plantillas"
 PLANTILLA_PROPUESTA = "propuesta_base.html"
@@ -37,6 +43,8 @@ class ItemRender:
     imagen_data_uri: str | None
     es_render_conceptual: bool
     es_ad_hoc: bool
+    # Sólo en artículos compuestos: (código, descripción, cantidad, importe) de cada partida.
+    componentes: list[tuple[str, str, str, str]] = field(default_factory=list)
 
 
 def formatear_moneda(valor: float | int) -> str:
@@ -106,23 +114,45 @@ def construir_contexto(
     traducir = idiomas.Traductor(config.idioma, dict(config.traducciones)) if config else idiomas.Traductor()
     t = idiomas.etiquetas_de(config.idioma if config else "es")
     partidas = [i for i in detalle.items if not i.cargo]
-    items = [
-        ItemRender(
-            codigo=item.codigo_origen,
-            descripcion=(
-                descripcion_impresa(item)
-                if (item.descripcion_editada or "").strip()
-                else traducir(item.descripcion_origen)
-            ),
-            cantidad=formatear_cantidad(item.cantidad),
-            precio_unitario=dinero(item.precio_unitario),
-            importe=dinero(item.importe),
-            imagen_data_uri=data_uris.get(str(item.imagen_id)) if item.imagen_id else None,
-            es_render_conceptual=item.es_render_conceptual,
-            es_ad_hoc=item.tipo_item == "ad_hoc",
+
+    def descripcion(item: CotizacionItem) -> str:
+        if (item.descripcion_editada or "").strip():
+            return descripcion_impresa(item)
+        return traducir(item.descripcion_origen)
+
+    def renglon_a_render(renglon: Renglon) -> ItemRender:
+        item = renglon.primero
+        imagen_id = renglon.imagen_id
+        if renglon.compuesto is None:
+            return ItemRender(
+                codigo=item.codigo_origen,
+                descripcion=descripcion(item),
+                cantidad=formatear_cantidad(item.cantidad),
+                precio_unitario=dinero(item.precio_unitario),
+                importe=dinero(item.importe),
+                imagen_data_uri=data_uris.get(str(imagen_id)) if imagen_id else None,
+                es_render_conceptual=item.es_render_conceptual,
+                es_ad_hoc=item.tipo_item == "ad_hoc",
+            )
+        # Compuesto: un renglón con la foto y el nombre del artículo; debajo, sus partidas tal cual.
+        cantidad_comun = renglon.cantidad_comun
+        return ItemRender(
+            codigo="",
+            descripcion=traducir(renglon.compuesto.nombre),
+            cantidad=formatear_cantidad(cantidad_comun) if cantidad_comun is not None else "",
+            precio_unitario=dinero(renglon.precio_unitario) if renglon.precio_unitario is not None else "",
+            importe=dinero(renglon.importe),
+            imagen_data_uri=data_uris.get(str(imagen_id)) if imagen_id else None,
+            es_render_conceptual=renglon.es_render_conceptual,
+            es_ad_hoc=False,
+            componentes=[
+                (i.codigo_origen, descripcion(i), formatear_cantidad(i.cantidad), dinero(i.importe)) for i in renglon.items
+            ],
         )
-        for item in partidas
-    ]
+
+    filas = renglones(partidas, detalle.compuestos)
+    items = [renglon_a_render(r) for r in filas]
+    seccion_de = categoria_efectiva(partidas, detalle.compuestos)
     totales: list[tuple[str, str]] = [(t["subtotal_mobiliario"], dinero(detalle.subtotal))]
     if any(i.cargo == "flete" for i in detalle.items):
         totales.append((t["flete"], dinero(detalle.flete)))
@@ -140,7 +170,7 @@ def construir_contexto(
         "referencia_externa": detalle.referencia_externa,
         "fecha": fecha,
         "items": items,
-        "secciones": agrupar_en_secciones(items, [traducir(i.categoria) for i in partidas]),
+        "secciones": agrupar_en_secciones(items, [traducir(seccion_de[r.primero.id]) for r in filas]),
         "totales": totales,
         "total": dinero(detalle.total),
         "mas_iva": detalle.iva is None,
@@ -193,6 +223,7 @@ async def generar_pdf_cotizacion(
     detalle: CotizacionDetalle, storage: Any, config: ConfigPresentacion | None = None
 ) -> bytes:
     imagenes = {str(i.imagen.id): i.imagen.ruta_storage for i in detalle.items if i.imagen and not i.cargo}
+    imagenes |= {str(c.imagen.id): c.imagen.ruta_storage for c in detalle.compuestos if c.imagen}
 
     async def descargar(imagen_id: str, ruta: str) -> tuple[str, str | None]:
         try:

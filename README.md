@@ -42,6 +42,7 @@ Detalles, todas las variables, cómo actualizar y los ajustes manuales que no se
 1. Ventas arma la cotización en el sistema de la empresa y exporta el archivo (.xlsx o .pdf).
 2. Lo sube aquí. La herramienta lee los ítems, los cruza contra el catálogo y asigna la imagen oficial de cada uno desde una biblioteca compartida.
 3. El vendedor ajusta sólo lo que falta: elige otra imagen, sube una foto o genera un render conceptual con IA a partir de la foto oficial.
+   También puede marcar varias partidas (p. ej. la cubierta y la base de una mesa) y combinarlas en un **artículo compuesto**: en los PDF salen como un solo artículo con una foto (la de una de las partidas, una subida o un render con IA hecho a partir de las de las partidas; las dos últimas quedan también en la galería de cada SKU) y debajo sus partidas. Precios, cantidades y totales no cambian.
 4. Descarga el PDF para el cliente.
 
 5. Si el cliente lo pide, arma la presentación editorial con la marca de Minimal 4.0, en la plantilla que elija y, si hace falta, en inglés y en dólares.
@@ -67,8 +68,8 @@ cotizador-visual/
 │   │   ├── auth.py               # validación del JWT de Supabase + perfil
 │   │   ├── db/                   # cliente de Supabase y esquemas Pydantic
 │   │   ├── marca/               # logotipo y monograma de Minimal 4.0 (PNG)
-│   │   ├── routers/              # salud, perfil, cotizaciones, presentaciones, plantillas, catalogo, imagenes, biblioteca, usuarios
-│   │   ├── servicios/            # parser_export, matching, cargos, fotos_pdf, render_pdf, presentacion, idiomas,
+│   │   ├── routers/              # salud, perfil, cotizaciones, compuestos, presentaciones, plantillas, catalogo, imagenes, biblioteca, usuarios
+│   │   ├── servicios/            # parser_export, matching, cargos, compuestos, fotos_pdf, render_pdf, presentacion, idiomas,
 │   │   │                         # ia_texto, proveedor_imagenes, catalogo_texto, storage
 │   │   └── plantillas/           # propuesta_base.html y presentacion_editorial.html
 │   ├── scripts/
@@ -95,8 +96,9 @@ cotizador-visual/
 │       ├── componentes/
 │       ├── api/                  # cliente HTTP tipado + hooks de TanStack Query
 │       └── lib/                  # supabase, sesión, formato
-└── supabase/migrations/          # 11 migraciones: esquema, RLS, buckets, catálogo, generaciones, linter,
-                                  # orden y cargos, presentaciones, historial de PDF, plantillas y paletas
+└── supabase/migrations/          # 12 migraciones: esquema, RLS, buckets, catálogo, generaciones, linter,
+                                  # orden y cargos, presentaciones, historial de PDF, plantillas y paletas,
+                                  # artículos compuestos
 ```
 
 ## Correr en local

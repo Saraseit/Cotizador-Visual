@@ -43,6 +43,7 @@ from app.db.modelos import (
     SeccionVista,
 )
 from app.servicios import idiomas
+from app.servicios.compuestos import Renglon, categoria_efectiva, renglones
 from app.servicios.render_pdf import formatear_cantidad, html_a_pdf
 
 registro = logging.getLogger("cotizador.presentacion")
@@ -106,14 +107,22 @@ class Grupo:
 def agrupar_por_seccion(detalle: CotizacionDetalle) -> list[Grupo]:
     """Partidas de mobiliario agrupadas por su sección del PDF, en el orden en que aparece cada una.
 
-    Flete y montaje no forman sección: van en el concentrado.
+    Flete y montaje no forman sección: van en el concentrado. Las partidas de un artículo compuesto
+    van todas en la sección de la primera, para que el artículo no quede partido.
     """
+    partidas = [i for i in sorted(detalle.items, key=lambda i: i.orden) if not i.cargo]
+    seccion_de = categoria_efectiva(partidas, detalle.compuestos)
     grupos: dict[str, Grupo] = {}
-    for item in sorted(detalle.items, key=lambda i: i.orden):
-        if item.cargo:
-            continue
-        grupos.setdefault(item.categoria, Grupo(item.categoria)).items.append(item)
+    for item in partidas:
+        clave = seccion_de[item.id]
+        grupos.setdefault(clave, Grupo(clave)).items.append(item)
     return list(grupos.values())
+
+
+def piezas_de(renglon: Renglon) -> float:
+    """Piezas que cuenta un renglón: un compuesto de 10 cubiertas y 10 bases son 10 mesas."""
+    comun = renglon.cantidad_comun
+    return comun if comun is not None else sum(i.cantidad for i in renglon.items)
 
 
 def titulo_por_defecto(clave: str) -> str:
@@ -159,6 +168,7 @@ def secciones_vista(config: ConfigPresentacion, detalle: CotizacionDetalle) -> l
     vistas: list[SeccionVista] = []
     for grupo in agrupar_por_seccion(detalle):
         ajuste = ajustes.get(grupo.clave) or SeccionPresentacion(clave=grupo.clave, titulo=titulo_por_defecto(grupo.clave))
+        filas = renglones(grupo.items, detalle.compuestos)
         vistas.append(
             SeccionVista(
                 clave=grupo.clave,
@@ -166,8 +176,8 @@ def secciones_vista(config: ConfigPresentacion, detalle: CotizacionDetalle) -> l
                 texto=ajuste.texto,
                 incluir=ajuste.incluir,
                 categoria=grupo.clave,
-                partidas=len(grupo.items),
-                piezas=sum(i.cantidad for i in grupo.items),
+                partidas=len(filas),
+                piezas=sum(piezas_de(r) for r in filas),
                 importe=round(sum(i.importe for i in grupo.items), 2),
                 con_imagen=sum(1 for i in grupo.items if i.imagen_id),
             )
@@ -199,6 +209,7 @@ def textos_traducibles(detalle: CotizacionDetalle, config: ConfigPresentacion, v
     textos: list[str] = [config.titulo, config.evento]
     textos += [v.titulo for v in vistas] + [v.texto for v in vistas if v.texto.strip()]
     textos += [t for t in config.manifiesto + config.cierre if t.strip()]
+    textos += [c.nombre for c in detalle.compuestos]
     for item in detalle.items:
         if item.cargo or (item.descripcion_editada or "").strip():
             continue
@@ -420,6 +431,8 @@ class PiezaRender:
     precio_unitario: str
     importe: str
     foto: str | None
+    # Sólo en artículos compuestos: "10 × CUBIERTA REDONDA" por cada partida.
+    componentes: list[str] = field(default_factory=list)
 
 
 _PARENTESIS = re.compile(r"^(?P<nombre>[^(]+?)\s*\((?P<detalle>.+)\)\s*$")
@@ -441,6 +454,35 @@ def _pieza(item: CotizacionItem, fotos: dict[str, str], dinero: idiomas.Dinero, 
         importe=dinero(item.importe),
         foto=fotos.get(str(item.imagen_id)) if item.imagen_id else None,
     )
+
+
+def _pieza_compuesta(
+    renglon: Renglon, fotos: dict[str, str], dinero: idiomas.Dinero, traducir: idiomas.Traductor
+) -> PiezaRender:
+    """Un artículo compuesto como una sola pieza: su nombre y su foto, y abajo sus partidas."""
+    assert renglon.compuesto is not None
+    partes = [_pieza(i, fotos, dinero, traducir) for i in renglon.items]
+    comun = renglon.cantidad_comun
+    imagen_id = renglon.imagen_id
+    return PiezaRender(
+        nombre=" ".join(traducir(renglon.compuesto.nombre).split()),
+        detalle="",
+        medidas=" · ".join(p.medidas for p in partes if p.medidas),
+        cantidad=formatear_cantidad(comun) if comun is not None else "",
+        precio_unitario=dinero(renglon.precio_unitario) if renglon.precio_unitario is not None else "",
+        importe=dinero(renglon.importe),
+        foto=fotos.get(str(imagen_id)) if imagen_id else None,
+        componentes=[f"{p.cantidad} × {p.nombre}" for p in partes],
+    )
+
+
+def piezas_de_grupo(
+    items: list[CotizacionItem], compuestos: list[Any], fotos: dict[str, str], dinero: idiomas.Dinero, traducir: idiomas.Traductor
+) -> list[PiezaRender]:
+    return [
+        _pieza_compuesta(r, fotos, dinero, traducir) if r.compuesto else _pieza(r.primero, fotos, dinero, traducir)
+        for r in renglones(items, compuestos)
+    ]
 
 
 def _columnas(texto: str, respaldo: list[str]) -> list[str]:
@@ -482,7 +524,7 @@ def construir_contexto(
     for vista in vistas:
         if not vista.incluir or vista.clave not in grupos:
             continue
-        piezas = [_pieza(i, fotos_piezas, dinero, traducir) for i in grupos[vista.clave].items]
+        piezas = piezas_de_grupo(grupos[vista.clave].items, detalle.compuestos, fotos_piezas, dinero, traducir)
         hueco = hueco_montaje(vista.clave)
         titulo = traducir(vista.titulo)
         respaldo = [
@@ -607,11 +649,10 @@ async def generar_pdf(
             return None  # ya no está en Storage: la página sale sin esa foto
 
     incluidas = {v.clave for v in vistas if v.incluir}
-    fotos_items = {
-        str(i.imagen.id): i.imagen.ruta_storage
-        for i in detalle.items
-        if i.imagen and not i.cargo and i.categoria in incluidas
-    }
+    items_incluidos = [i for g in agrupar_por_seccion(detalle) if g.clave in incluidas for i in g.items]
+    fotos_items = {str(i.imagen.id): i.imagen.ruta_storage for i in items_incluidos if i.imagen}
+    en_compuestos = {i.compuesto_id for i in items_incluidos if i.compuesto_id}
+    fotos_items |= {str(c.imagen.id): c.imagen.ruta_storage for c in detalle.compuestos if c.imagen and c.id in en_compuestos}
     huecos = list(imagenes_huecos.items())
     resultados = await asyncio.gather(
         *(bajar(fila["ruta_storage"], LADO_FOTO_GRANDE) for _, fila in huecos),

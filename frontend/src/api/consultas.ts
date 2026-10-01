@@ -150,6 +150,68 @@ export function useAsignarCargo(cotizacionId: string) {
   })
 }
 
+// --- Artículos compuestos ---------------------------------------------------
+
+/** Combinar partidas, cambiar el nombre o la foto del compuesto, o separarlo. Todas devuelven la cotización. */
+function useMutacionCompuesto<T>(
+  cotizacionId: string,
+  fn: (valor: T) => Promise<CotizacionDetalle>,
+  alGuardar?: (valor: T) => void,
+) {
+  const cliente = useQueryClient()
+  const alTerminar = useAlTerminarEdicion(cotizacionId)
+  return useMutation({
+    mutationKey: llaveEdicion(cotizacionId),
+    mutationFn: fn,
+    onSettled: (detalle) => alTerminar(detalle),
+    onSuccess: (_detalle, valor) => {
+      void cliente.invalidateQueries({ queryKey: llaves.cotizaciones, exact: true })
+      void cliente.invalidateQueries({ queryKey: llaves.presentacion(cotizacionId) })
+      alGuardar?.(valor)
+    },
+  })
+}
+
+export function useCrearCompuesto(cotizacionId: string) {
+  return useMutacionCompuesto(cotizacionId, (cuerpo: { item_ids: string[]; nombre?: string; imagen_id?: string | null }) =>
+    api.compuestos.crear(cotizacionId, cuerpo),
+  )
+}
+
+interface CambiosCompuesto {
+  compuestoId: string
+  nombre?: string
+  imagen_id?: string | null
+  /** Copia la foto a la galería de cada SKU del compuesto (fotos nuevas del artículo completo). */
+  guardar_en_galerias?: boolean
+}
+
+export function useEditarCompuesto(cotizacionId: string) {
+  const cliente = useQueryClient()
+  return useMutacionCompuesto(
+    cotizacionId,
+    ({ compuestoId, ...cambios }: CambiosCompuesto) => api.compuestos.editar(cotizacionId, compuestoId, cambios),
+    ({ guardar_en_galerias }) => {
+      if (!guardar_en_galerias) return
+      void cliente.invalidateQueries({ queryKey: ['catalogo', 'imagenes'] })
+      void cliente.invalidateQueries({ queryKey: llaves.resumenBiblioteca })
+    },
+  )
+}
+
+export function useSepararCompuesto(cotizacionId: string) {
+  return useMutacionCompuesto(cotizacionId, (compuestoId: string) => api.compuestos.separar(cotizacionId, compuestoId))
+}
+
+export function useGenerarImagenCompuesto(cotizacionId: string) {
+  const cliente = useQueryClient()
+  return useMutation({
+    mutationFn: ({ compuestoId, peticion }: { compuestoId: string; peticion: string }) =>
+      api.compuestos.generar(cotizacionId, compuestoId, peticion),
+    onSuccess: () => void cliente.invalidateQueries({ queryKey: llaves.resumenBiblioteca }),
+  })
+}
+
 export function useGenerarPropuesta(cotizacionId: string) {
   const cliente = useQueryClient()
   return useMutation({

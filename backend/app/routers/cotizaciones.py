@@ -15,6 +15,7 @@ from app.db.cliente import ClienteDB
 from app.db.modelos import (
     AsignarCargo,
     AsignarImagen,
+    Compuesto,
     CotizacionDetalle,
     CotizacionItem,
     CotizacionResumen,
@@ -43,7 +44,10 @@ registro = logging.getLogger("cotizador.cotizaciones")
 Config = Annotated[Configuracion, Depends(obtener_configuracion)]
 
 SELECT_DETALLE = "*, cotizacion_items(*, imagen:imagenes(*), item:catalogo_items(*))"
-SELECT_RESUMEN = "*, cotizacion_items(id, imagen_id, cargo)"
+SELECT_RESUMEN = (
+    "*, cotizacion_items(id, imagen_id, cargo, compuesto_id),"
+    " cotizacion_compuestos!cotizacion_compuestos_cotizacion_id_fkey(id, imagen_id)"
+)
 
 
 # ---------------------------------------------------------------------------
@@ -64,18 +68,52 @@ async def _fila_cotizacion(db: Any, cotizacion_id: UUID, seleccion: str = SELECT
 
 def _resumen_desde_fila(fila: dict[str, Any]) -> CotizacionResumen:
     items = [i for i in fila.get("cotizacion_items") or [] if not i.get("cargo")]
-    datos = {k: v for k, v in fila.items() if k != "cotizacion_items"}
+    # Las partidas de un compuesto se imprimen con la foto del compuesto.
+    imagen_compuesto = {str(c["id"]): c.get("imagen_id") for c in fila.get("cotizacion_compuestos") or []}
+    datos = {k: v for k, v in fila.items() if k not in ("cotizacion_items", "cotizacion_compuestos")}
+
+    def con_imagen(item: dict[str, Any]) -> bool:
+        compuesto = item.get("compuesto_id")
+        if compuesto and str(compuesto) in imagen_compuesto:
+            return bool(imagen_compuesto[str(compuesto)])
+        return bool(item.get("imagen_id"))
+
     return CotizacionResumen(
         **datos,
         total_items=len(items),
-        items_pendientes=sum(1 for i in items if not i.get("imagen_id")),
+        items_pendientes=sum(1 for i in items if not con_imagen(i)),
     )
 
 
-async def _armar_detalle(fila: dict[str, Any], storage: Any) -> CotizacionDetalle:
+async def compuestos_crudos(db: Any, cotizacion_id: UUID | str) -> list[dict[str, Any]]:
+    """Compuestos de la cotización, cada uno con su fila de `imagenes` en `imagen` (o None)."""
+    filas = (
+        await db.table("cotizacion_compuestos").select("*").eq("cotizacion_id", str(cotizacion_id)).order("creado_en").execute()
+    ).data or []
+    ids = sorted({str(f["imagen_id"]) for f in filas if f.get("imagen_id")})
+    imagenes: dict[str, dict[str, Any]] = {}
+    if ids:
+        respuesta = await db.table("imagenes").select("*").in_("id", ids).execute()
+        imagenes = {str(i["id"]): i for i in respuesta.data or []}
+    return [{**f, "imagen": imagenes.get(str(f.get("imagen_id")))} for f in filas]
+
+
+async def _armar_detalle(
+    fila: dict[str, Any], storage: Any, compuestos: list[dict[str, Any]] | None = None
+) -> CotizacionDetalle:
     crudos = sorted(fila.get("cotizacion_items") or [], key=lambda i: (i.get("orden", 0), i.get("creado_en", "")))
+    compuestos = compuestos or []
     rutas = [i["imagen"]["ruta_storage"] for i in crudos if i.get("imagen")]
+    rutas += [c["imagen"]["ruta_storage"] for c in compuestos if c.get("imagen")]
     urls = await storage.urls_firmadas(storage.bucket_imagenes, rutas)
+
+    modelos_compuestos: dict[str, Compuesto] = {}
+    for crudo in compuestos:
+        imagen = dict(crudo["imagen"]) if crudo.get("imagen") else None
+        if imagen:
+            imagen["url"] = urls.get(imagen["ruta_storage"])
+        datos = {k: v for k, v in crudo.items() if k in ("id", "cotizacion_id", "nombre", "imagen_id")}
+        modelos_compuestos[str(crudo["id"])] = Compuesto(**datos, imagen=imagen, estado=calcular_estado_item(imagen))
 
     items: list[CotizacionItem] = []
     for crudo in crudos:
@@ -86,18 +124,29 @@ async def _armar_detalle(fila: dict[str, Any], storage: Any) -> CotizacionDetall
             imagen["url"] = urls.get(imagen["ruta_storage"])
         cantidad = float(datos.get("cantidad") or 0)
         precio = float(datos.get("precio_unitario") or 0)
+        compuesto = modelos_compuestos.get(str(datos.get("compuesto_id")))
+        if compuesto is None:
+            datos["compuesto_id"] = None  # el compuesto ya no existe: la partida va suelta
+        else:
+            compuesto.item_ids.append(datos["id"])
         items.append(
             CotizacionItem(
                 **datos,
                 imagen=imagen,
                 item=item,
-                estado=calcular_estado_item(imagen),
+                # En un compuesto, lo que se imprime es la foto del compuesto.
+                estado=compuesto.estado if compuesto else calcular_estado_item(imagen),
                 importe=round(cantidad * precio, 2),
             )
         )
 
     encabezado = {k: v for k, v in fila.items() if k != "cotizacion_items"}
-    return CotizacionDetalle(**encabezado, items=items, **calcular_totales(items, fila.get("iva_documento")))
+    return CotizacionDetalle(
+        **encabezado,
+        items=items,
+        compuestos=[c for c in modelos_compuestos.values() if c.item_ids],
+        **calcular_totales(items, fila.get("iva_documento")),
+    )
 
 
 def calcular_totales(items: list[CotizacionItem], iva_documento: Any) -> dict[str, Any]:
@@ -123,7 +172,8 @@ def calcular_totales(items: list[CotizacionItem], iva_documento: Any) -> dict[st
 
 
 async def cargar_detalle(db: Any, storage: Any, cotizacion_id: UUID) -> CotizacionDetalle:
-    return await _armar_detalle(await _fila_cotizacion(db, cotizacion_id), storage)
+    fila = await _fila_cotizacion(db, cotizacion_id)
+    return await _armar_detalle(fila, storage, await compuestos_crudos(db, cotizacion_id))
 
 
 async def config_de_presentacion(db: Any, cotizacion_id: UUID, detalle: CotizacionDetalle) -> Any:
@@ -350,7 +400,7 @@ async def generar_propuesta(
     """Renderiza el PDF de la propuesta, lo guarda en Storage y devuelve una URL firmada."""
     fila = await _fila_cotizacion(db, cotizacion_id)
     _puede_editar(fila, usuario)
-    detalle = await _armar_detalle(fila, storage)
+    detalle = await _armar_detalle(fila, storage, await compuestos_crudos(db, cotizacion_id))
     config = await config_de_presentacion(db, cotizacion_id, detalle)
 
     pdf = await render_pdf.generar_pdf_cotizacion(detalle, storage, config)
@@ -416,6 +466,19 @@ async def asignar_cargo(
     """Marca una partida como flete o montaje (o la devuelve a mobiliario con `null`)."""
     cotizacion = await _fila_cotizacion(db, cotizacion_id, "*")
     _puede_editar(cotizacion, usuario)
+    if cuerpo.cargo:
+        en_compuesto = (
+            await db.table("cotizacion_items")
+            .select("compuesto_id")
+            .eq("id", str(item_id))
+            .eq("cotizacion_id", str(cotizacion_id))
+            .limit(1)
+            .execute()
+        )
+        if en_compuesto.data and en_compuesto.data[0].get("compuesto_id"):
+            raise HTTPException(
+                status.HTTP_409_CONFLICT, "La partida es parte de un artículo compuesto: sepáralo antes de marcarla como cargo."
+            )
     actualizado = (
         await db.table("cotizacion_items")
         .update({"cargo": cuerpo.cargo})

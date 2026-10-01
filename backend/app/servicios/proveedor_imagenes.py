@@ -28,6 +28,8 @@ class ProveedorImagenes(Protocol):
 
     async def generar_escena(self, referencias: list[bytes], prompt: str) -> bytes: ...
 
+    async def generar_compuesto(self, referencias: list[bytes], peticion: str, cantidad: int) -> list[bytes]: ...
+
 
 def construir_prompt(prompt_estilo: str, peticion: str) -> str:
     return f"{prompt_estilo.strip()}\n\nCambio solicitado por el cliente: {peticion.strip()}"
@@ -95,6 +97,36 @@ class ProveedorOpenAI:
         except Exception as error:  # red, timeouts, etc.
             raise ErrorProveedorImagenes(f"Error inesperado al llamar a OpenAI: {error}") from error
 
+        return self._imagenes(respuesta)
+
+    async def generar_compuesto(self, referencias: list[bytes], peticion: str, cantidad: int) -> list[bytes]:
+        """Artículo compuesto: varias fotos de piezas (cubierta, base…) -> el artículo armado.
+
+        Mismo estilo fijo que las variantes (ángulo, fondo, luz), con todas las piezas como referencia.
+        """
+        from openai import OpenAIError
+
+        archivos = [
+            (f"pieza-{indice}.png", preparar_imagen_base(datos), "image/png")
+            for indice, datos in enumerate(referencias[:REFERENCIAS_MAXIMAS_ESCENA])
+        ]
+        opciones: dict[str, str] = {}
+        if acepta_input_fidelity(self.modelo):
+            opciones["input_fidelity"] = "high"
+        try:
+            respuesta = await self._cliente.images.edit(
+                model=self.modelo,
+                image=archivos,
+                prompt=construir_prompt(self._prompt_estilo, peticion),
+                n=cantidad,
+                size="1024x1024",
+                quality=self._calidad,  # type: ignore[arg-type]
+                **opciones,
+            )
+        except OpenAIError as error:
+            raise ErrorProveedorImagenes(f"OpenAI no pudo generar el artículo compuesto: {error}") from error
+        except Exception as error:
+            raise ErrorProveedorImagenes(f"Error inesperado al llamar a OpenAI: {error}") from error
         return self._imagenes(respuesta)
 
     async def generar_escena(self, referencias: list[bytes], prompt: str) -> bytes:
@@ -177,6 +209,29 @@ class ProveedorSimulado:
             dibujo.text((12, 12), f"SIMULADO {indice + 1}: {peticion[:40]}", fill=(255, 255, 255), font=fuente)
             buffer = BytesIO()
             variante.save(buffer, format="PNG")
+            salidas.append(buffer.getvalue())
+        return salidas
+
+    async def generar_compuesto(self, referencias: list[bytes], peticion: str, cantidad: int) -> list[bytes]:
+        """Compuesto falso: las piezas una sobre otra (la primera arriba), con tinte y etiqueta."""
+        from PIL import Image, ImageDraw, ImageFont
+
+        lado = LADO_MAXIMO_BASE
+        piezas = [Image.open(BytesIO(preparar_imagen_base(d))).convert("RGBA") for d in referencias[:4]]
+        salidas: list[bytes] = []
+        for indice in range(cantidad):
+            lienzo = Image.new("RGBA", (lado, lado), (245, 242, 236, 255))
+            alto = lado // max(len(piezas), 1)
+            for posicion, pieza in enumerate(piezas):
+                copia = pieza.copy()
+                copia.thumbnail((lado - 80, alto - 20))
+                lienzo.alpha_composite(copia, ((lado - copia.width) // 2, posicion * alto + (alto - copia.height) // 2))
+            tinte = self._TINTES[indice % len(self._TINTES)]
+            final = Image.alpha_composite(lienzo, Image.new("RGBA", lienzo.size, (*tinte, 40))).convert("RGB")
+            fuente = ImageFont.load_default(size=lado // 30)
+            ImageDraw.Draw(final).text((12, 12), f"COMPUESTO SIMULADO {indice + 1}", fill=(20, 20, 20), font=fuente)
+            buffer = BytesIO()
+            final.save(buffer, format="PNG")
             salidas.append(buffer.getvalue())
         return salidas
 

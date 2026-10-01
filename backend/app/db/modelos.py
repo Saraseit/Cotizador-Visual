@@ -187,11 +187,31 @@ class CotizacionItem(BaseModel):
     # Texto que el vendedor ajustó en Revisar para esta cotización; vacío = se usa el del sistema.
     # Si está lleno se imprime tal cual y no se manda a traducir: es una corrección deliberada.
     descripcion_editada: str = ""
+    # Artículo compuesto al que pertenece (sólo presentación: precio y cantidad no cambian).
+    compuesto_id: UUID | None = None
     # Campos calculados
     imagen: Imagen | None = None
     item: CatalogoItem | None = None
     estado: EstadoItem = "falta_imagen"
     importe: float = 0
+
+
+class Compuesto(BaseModel):
+    """Varias partidas que se presentan como un solo artículo (p. ej. cubierta + base de una mesa).
+
+    Sólo cambia la presentación: en los PDF ocupan un renglón con esta foto y este nombre, y cada
+    partida conserva su código, cantidad y precio.
+    """
+
+    id: UUID
+    cotizacion_id: UUID
+    nombre: str = ""
+    imagen_id: UUID | None = None
+    # Calculados
+    imagen: Imagen | None = None
+    estado: EstadoItem = "falta_imagen"
+    # Partidas que lo forman, en el orden de impresión.
+    item_ids: list[UUID] = Field(default_factory=list)
 
 
 class CotizacionResumen(BaseModel):
@@ -209,6 +229,7 @@ class CotizacionResumen(BaseModel):
 
 class CotizacionDetalle(CotizacionResumen):
     items: list[CotizacionItem] = Field(default_factory=list)
+    compuestos: list[Compuesto] = Field(default_factory=list)
     # Totales: subtotal de las partidas de mobiliario, cargos, IVA del PDF (None = "más IVA") y total.
     subtotal: float = 0
     flete: float = 0
@@ -241,6 +262,31 @@ class EditarDescripcion(BaseModel):
     """Texto de la partida para esta cotización. Vacío vuelve al del sistema."""
 
     descripcion: str = Field("", max_length=600)
+
+
+class CrearCompuesto(BaseModel):
+    """Partidas a combinar. Sin nombre se usan sus descripciones unidas; sin imagen, la de la primera
+    partida que tenga."""
+
+    item_ids: list[UUID] = Field(min_length=2, max_length=20)
+    nombre: str = Field("", max_length=200)
+    imagen_id: UUID | None = None
+
+
+class EditarCompuesto(BaseModel):
+    """Sólo se aplica lo que venga. `imagen_id: null` quita la foto; `nombre: ""` vuelve al de por defecto.
+
+    `guardar_en_galerias` copia la imagen a la galería de cada SKU del compuesto: es para las fotos
+    nuevas del artículo completo (subidas o generadas con IA), no para la de uno de los componentes.
+    """
+
+    nombre: str | None = Field(None, max_length=200)
+    imagen_id: UUID | None = None
+    guardar_en_galerias: bool = False
+
+
+class PeticionGenerarCompuesto(BaseModel):
+    peticion: str = Field("", max_length=600)
 
 
 class ResultadoPdf(BaseModel):

@@ -231,6 +231,9 @@ async def eliminar_imagen(imagen_id: UUID, usuario: Usuario, db: ClienteDB, stor
     en_uso = await db.table("cotizacion_items").select("id").eq("imagen_id", str(imagen_id)).limit(1).execute()
     if en_uso.data:
         raise HTTPException(status.HTTP_409_CONFLICT, "La imagen está asignada a un ítem de cotización; no se puede borrar.")
+    en_compuesto = await db.table("cotizacion_compuestos").select("id").eq("imagen_id", str(imagen_id)).limit(1).execute()
+    if en_compuesto.data:
+        raise HTTPException(status.HTTP_409_CONFLICT, "La imagen es la foto de un artículo compuesto; no se puede borrar.")
 
     await storage.eliminar(storage.bucket_imagenes, imagen["ruta_storage"])
     await db.table("imagenes").delete().eq("id", str(imagen_id)).execute()

@@ -116,6 +116,19 @@ export const api = {
     editarDescripcion: (cotizacionId: string, itemId: string, descripcion: string) =>
       peticion<CotizacionDetalle>(`/cotizaciones/${cotizacionId}/items/${itemId}/descripcion`, json({ descripcion }, 'PATCH')),
   },
+  compuestos: {
+    crear: (cotizacionId: string, cuerpo: { item_ids: string[]; nombre?: string; imagen_id?: string | null }) =>
+      peticion<CotizacionDetalle>(`/cotizaciones/${cotizacionId}/compuestos`, json(cuerpo)),
+    editar: (
+      cotizacionId: string,
+      compuestoId: string,
+      cambios: { nombre?: string; imagen_id?: string | null; guardar_en_galerias?: boolean },
+    ) => peticion<CotizacionDetalle>(`/cotizaciones/${cotizacionId}/compuestos/${compuestoId}`, json(cambios, 'PATCH')),
+    separar: (cotizacionId: string, compuestoId: string) =>
+      peticion<CotizacionDetalle>(`/cotizaciones/${cotizacionId}/compuestos/${compuestoId}`, { method: 'DELETE' }),
+    generar: (cotizacionId: string, compuestoId: string, peticionTexto: string) =>
+      peticion<ResultadoGeneracion>(`/cotizaciones/${cotizacionId}/compuestos/${compuestoId}/generar`, json({ peticion: peticionTexto })),
+  },
   presentacion: {
     obtener: (cotizacionId: string) => peticion<Presentacion>(`/cotizaciones/${cotizacionId}/presentacion`),
     guardar: (cotizacionId: string, config: ConfigPresentacionEntrada) =>

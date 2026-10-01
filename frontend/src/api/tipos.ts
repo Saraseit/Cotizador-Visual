@@ -145,10 +145,27 @@ export interface CotizacionItem {
   cargo: Cargo | null
   /** Texto ajustado para esta cotización; vacío = se usa el del sistema. */
   descripcion_editada: string
+  /** Artículo compuesto al que pertenece (sólo presentación). */
+  compuesto_id: string | null
   imagen: Imagen | null
   item: CatalogoItem | null
   estado: EstadoItem
   importe: number
+}
+
+/**
+ * Varias partidas presentadas como un solo artículo (p. ej. cubierta + base de una mesa).
+ * Sólo cambia la presentación: cada partida conserva su código, cantidad y precio.
+ */
+export interface Compuesto {
+  id: string
+  cotizacion_id: string
+  nombre: string
+  imagen_id: string | null
+  imagen: Imagen | null
+  estado: EstadoItem
+  /** Partidas que lo forman, en el orden de impresión. */
+  item_ids: string[]
 }
 
 export interface CotizacionResumen {
@@ -166,6 +183,7 @@ export interface CotizacionResumen {
 
 export interface CotizacionDetalle extends CotizacionResumen {
   items: CotizacionItem[]
+  compuestos: Compuesto[]
   subtotal: number
   flete: number
   montaje: number
@@ -226,13 +244,6 @@ export interface PaletaGuardada {
   nombre: string
   paleta: Paleta
   predefinida: boolean
-}
-
-/** Moneda e idioma de los dos PDF. Se edita desde Revisar y desde el editor de la presentación. */
-export interface FormatoPropuesta {
-  moneda: Moneda
-  tipo_cambio: number | null
-  idioma: Idioma
 }
 
 /** Moneda e idioma de los dos PDF. Se edita desde Revisar y desde el editor de la presentación. */

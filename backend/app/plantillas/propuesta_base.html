@@ -111,6 +111,10 @@
     .descripcion { font-weight: 500; }
     .codigo { color: #57534A; font-size: 8.5pt; margin-top: 2pt; }
     .nota-item { color: #7A3D22; font-size: 8pt; margin-top: 3pt; }
+    table.componentes { width: 100%; margin-top: 4pt; border-collapse: collapse; font-size: 8.5pt; color: #57534A; }
+    table.componentes td { padding: 1.5pt 0; border: none; vertical-align: top; }
+    table.componentes .cc { width: 28pt; text-align: right; padding-right: 6pt; white-space: nowrap; }
+    table.componentes .ci { text-align: right; white-space: nowrap; padding-left: 6pt; }
 
     table.totales { width: 100%; margin-top: 10pt; border-collapse: collapse; page-break-inside: avoid; }
     table.totales td { padding: 6pt; }
@@ -190,6 +194,17 @@
         <td>
           <div class="descripcion">{{ item.descripcion }}</div>
           {% if item.codigo %}<div class="codigo">{{ t.codigo }} {{ item.codigo }}</div>{% endif %}
+          {% if item.componentes %}
+          <table class="componentes">
+            {% for codigo, descripcion, cantidad, importe in item.componentes %}
+            <tr>
+              <td class="cc">{{ cantidad }} ×</td>
+              <td>{{ descripcion }}{% if codigo %} · {{ codigo }}{% endif %}</td>
+              <td class="ci">{{ importe }}</td>
+            </tr>
+            {% endfor %}
+          </table>
+          {% endif %}
           {% if item.es_render_conceptual %}<div class="nota-item">{{ t.nota_render_item }}</div>{% endif %}
         </td>
         <td class="col-cantidad">{{ item.cantidad }}</td>

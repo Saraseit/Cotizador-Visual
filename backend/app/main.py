@@ -11,6 +11,7 @@ from app.db.cliente import crear_cliente
 from app.routers import (
     biblioteca,
     catalogo,
+    compuestos,
     cotizaciones,
     imagenes,
     perfil,
@@ -58,6 +59,7 @@ def crear_app() -> FastAPI:
         salud.router,
         perfil.router,
         cotizaciones.router,
+        compuestos.router,
         presentaciones.router,
         plantillas.router,
         catalogo.router,
