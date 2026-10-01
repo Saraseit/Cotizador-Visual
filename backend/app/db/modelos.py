@@ -196,22 +196,57 @@ class CotizacionItem(BaseModel):
     importe: float = 0
 
 
+PrecioModo = Literal["suma", "partida", "manual"]
+
+
 class Compuesto(BaseModel):
     """Varias partidas que se presentan como un solo artículo (p. ej. cubierta + base de una mesa).
 
-    Sólo cambia la presentación: en los PDF ocupan un renglón con esta foto y este nombre, y cada
-    partida conserva su código, cantidad y precio.
+    En los PDF ocupan un renglón con esta foto y este nombre, y debajo sus partidas. El precio es la
+    suma de las partidas ('suma'), el de una de ellas ('partida', `precio_item_id`) o uno escrito por
+    el vendedor ('manual', `precio_manual`, unitario). Fuera de 'suma' la propuesta no cuadra con el
+    PDF del sistema y Revisar lo avisa.
     """
 
     id: UUID
     cotizacion_id: UUID
     nombre: str = ""
     imagen_id: UUID | None = None
+    precio_modo: PrecioModo = "suma"
+    precio_item_id: UUID | None = None
+    precio_manual: float | None = None
     # Calculados
     imagen: Imagen | None = None
     estado: EstadoItem = "falta_imagen"
     # Partidas que lo forman, en el orden de impresión.
     item_ids: list[UUID] = Field(default_factory=list)
+    # Lo que se presenta (None = partidas con cantidades distintas, sólo en 'suma') y lo que suman sus partidas.
+    cantidad: float | None = None
+    precio_unitario: float | None = None
+    importe: float = 0
+    importe_partidas: float = 0
+
+
+class AjustePrecio(BaseModel):
+    """Un compuesto cuyo precio presentado no es la suma de sus partidas."""
+
+    compuesto_id: UUID
+    nombre: str
+    importe_partidas: float
+    importe: float
+
+
+class Cuadre(BaseModel):
+    """Comparación del total de la propuesta con el del PDF del sistema que se subió."""
+
+    cuadra: bool = True
+    total_documento: float = 0
+    total_propuesta: float = 0
+    diferencia: float = 0
+    # SubTotal impreso en el PDF (None si no se encontró o es .xlsx) y suma de las partidas leídas.
+    subtotal_documento: float | None = None
+    suma_partidas: float = 0
+    ajustes: list[AjustePrecio] = Field(default_factory=list)
 
 
 class CotizacionResumen(BaseModel):
@@ -238,6 +273,7 @@ class CotizacionDetalle(CotizacionResumen):
     total: float = 0
     # Sólo al crear: cuántas fotos nuevas del PDF se guardaron en la biblioteca.
     fotos_importadas: int = 0
+    cuadre: Cuadre = Field(default_factory=Cuadre)
 
 
 class Reordenar(BaseModel):
@@ -264,13 +300,30 @@ class EditarDescripcion(BaseModel):
     descripcion: str = Field("", max_length=600)
 
 
+class PrecioCompuesto(BaseModel):
+    """Cómo se presenta el precio del compuesto. 'partida' pide `precio_item_id`; 'manual', `precio_manual`."""
+
+    precio_modo: PrecioModo = "suma"
+    precio_item_id: UUID | None = None
+    precio_manual: float | None = Field(None, ge=0, le=100_000_000)
+
+    @model_validator(mode="after")
+    def _dato_del_modo(self) -> "PrecioCompuesto":
+        if self.precio_modo == "partida" and not self.precio_item_id:
+            raise ValueError("Elige de qué partida se queda el precio.")
+        if self.precio_modo == "manual" and self.precio_manual is None:
+            raise ValueError("Escribe el precio del artículo.")
+        return self
+
+
 class CrearCompuesto(BaseModel):
     """Partidas a combinar. Sin nombre se usan sus descripciones unidas; sin imagen, la de la primera
-    partida que tenga."""
+    partida que tenga; sin precio, la suma de las partidas."""
 
     item_ids: list[UUID] = Field(min_length=2, max_length=20)
     nombre: str = Field("", max_length=200)
     imagen_id: UUID | None = None
+    precio: PrecioCompuesto = Field(default_factory=PrecioCompuesto)
 
 
 class EditarCompuesto(BaseModel):
@@ -283,6 +336,7 @@ class EditarCompuesto(BaseModel):
     nombre: str | None = Field(None, max_length=200)
     imagen_id: UUID | None = None
     guardar_en_galerias: bool = False
+    precio: PrecioCompuesto | None = None
 
 
 class PeticionGenerarCompuesto(BaseModel):

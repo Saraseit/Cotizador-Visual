@@ -5,6 +5,7 @@ import { Link, useParams } from 'react-router-dom'
 import { useCotizacion, useGenerarPropuesta } from '@/api/consultas'
 import type { ResultadoPdf } from '@/api/tipos'
 import { Aviso, mensajeDeError } from '@/componentes/Aviso'
+import { AvisoCuadre } from '@/componentes/AvisoCuadre'
 import { Boton } from '@/componentes/Boton'
 import { Pildora } from '@/componentes/Pildora'
 import { moneda } from '@/lib/formato'
@@ -53,6 +54,8 @@ export function Generar() {
           {conceptuales > 0 && <Pildora tono="conceptual">{conceptuales} render{conceptuales === 1 ? '' : 's'} conceptual{conceptuales === 1 ? '' : 'es'}</Pildora>}
         </div>
       </header>
+
+      <AvisoCuadre cuadre={cotizacion.cuadre} className="mt-6" />
 
       <div className="mt-8 grid gap-5 md:grid-cols-2">
         <section className="tarjeta flex flex-col p-6">

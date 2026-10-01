@@ -25,6 +25,7 @@ from app.db.modelos import (
     ResultadoPdf,
     calcular_estado_item,
 )
+from app.servicios import compuestos as servicio_compuestos
 from app.servicios import presentacion as servicio_presentacion
 from app.servicios import render_pdf
 from app.servicios.cargos import clasificar_cargo
@@ -112,7 +113,12 @@ async def _armar_detalle(
         imagen = dict(crudo["imagen"]) if crudo.get("imagen") else None
         if imagen:
             imagen["url"] = urls.get(imagen["ruta_storage"])
-        datos = {k: v for k, v in crudo.items() if k in ("id", "cotizacion_id", "nombre", "imagen_id")}
+        datos = {
+            k: v
+            for k, v in crudo.items()
+            if k in ("id", "cotizacion_id", "nombre", "imagen_id", "precio_modo", "precio_item_id", "precio_manual")
+            and v is not None
+        }
         modelos_compuestos[str(crudo["id"])] = Compuesto(**datos, imagen=imagen, estado=calcular_estado_item(imagen))
 
     items: list[CotizacionItem] = []
@@ -140,35 +146,37 @@ async def _armar_detalle(
             )
         )
 
+    activos = [c for c in modelos_compuestos.values() if c.item_ids]
+    # Lo que presenta cada compuesto (cantidad, precio e importe según su modo de precio).
+    partidas = [i for i in items if not i.cargo]
+    for renglon in servicio_compuestos.renglones(partidas, activos):
+        if renglon.compuesto:
+            renglon.compuesto.cantidad = renglon.cantidad
+            renglon.compuesto.precio_unitario = renglon.precio_unitario
+            renglon.compuesto.importe = renglon.importe
+            renglon.compuesto.importe_partidas = renglon.importe_partidas
+
+    iva_documento = float(fila["iva_documento"]) if fila.get("iva_documento") is not None else None
+    subtotal_documento = float(fila["subtotal_documento"]) if fila.get("subtotal_documento") is not None else None
+    totales = calcular_totales(items, iva_documento, activos)
     encabezado = {k: v for k, v in fila.items() if k != "cotizacion_items"}
     return CotizacionDetalle(
         **encabezado,
         items=items,
-        compuestos=[c for c in modelos_compuestos.values() if c.item_ids],
-        **calcular_totales(items, fila.get("iva_documento")),
+        compuestos=activos,
+        **totales,
+        cuadre=servicio_compuestos.cuadre(items, activos, totales["total"], subtotal_documento, iva_documento),
     )
 
 
-def calcular_totales(items: list[CotizacionItem], iva_documento: Any) -> dict[str, Any]:
+def calcular_totales(items: list[CotizacionItem], iva_documento: Any, compuestos: list[Compuesto] | None = None) -> dict[str, Any]:
     """Subtotal de mobiliario, cargos por tipo, IVA del documento y total.
 
     El IVA se copia del PDF del sistema (lo calcula sobre todo, cargos incluidos); si el PDF sólo
-    dice "más IVA" queda en None y el total no lo incluye.
+    dice "más IVA" queda en None y el total no lo incluye. Un compuesto con otro precio cambia el
+    subtotal y el IVA se ajusta en proporción (ver `servicios/compuestos.totales`).
     """
-    partidas = [i for i in items if not i.cargo]
-    subtotal = round(sum(i.importe for i in partidas), 2)
-    flete = round(sum(i.importe for i in items if i.cargo == "flete"), 2)
-    montaje = round(sum(i.importe for i in items if i.cargo == "montaje"), 2)
-    iva = round(float(iva_documento), 2) if iva_documento is not None else None
-    return {
-        "subtotal": subtotal,
-        "flete": flete,
-        "montaje": montaje,
-        "iva": iva,
-        "total": round(subtotal + flete + montaje + (iva or 0), 2),
-        "total_items": len(partidas),
-        "items_pendientes": sum(1 for i in partidas if i.estado == "falta_imagen"),
-    }
+    return servicio_compuestos.totales(items, compuestos or [], float(iva_documento) if iva_documento is not None else None)
 
 
 async def cargar_detalle(db: Any, storage: Any, cotizacion_id: UUID) -> CotizacionDetalle:
@@ -271,6 +279,7 @@ async def crear_cotizacion(
                 "creado_por": str(usuario.id),
                 "estado": "revision",
                 "iva_documento": str(export.iva) if export.iva is not None else None,
+                "subtotal_documento": str(export.subtotal) if export.subtotal is not None else None,
             }
         )
         .execute()

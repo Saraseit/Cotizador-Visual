@@ -6,6 +6,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useAsignarCargo, useCotizacion, usePresentacion, useReordenar } from '@/api/consultas'
 import type { Cargo, Compuesto, CotizacionItem } from '@/api/tipos'
 import { Aviso, mensajeDeError } from '@/componentes/Aviso'
+import { AvisoCuadre } from '@/componentes/AvisoCuadre'
 import { Boton } from '@/componentes/Boton'
 import { Miniatura } from '@/componentes/Miniatura'
 import { PildoraEstadoItem } from '@/componentes/Pildora'
@@ -285,6 +286,8 @@ export function Revisar() {
         </div>
       </header>
 
+      <AvisoCuadre cuadre={cotizacion.cuadre} className="mt-6" />
+
       {fotosImportadas > 0 && (
         <Aviso tono="info" className="mt-6">
           Se {fotosImportadas === 1 ? 'guardó 1 foto' : `guardaron ${fotosImportadas} fotos`} del PDF en la biblioteca de sus artículos. Ya
@@ -380,7 +383,8 @@ export function Revisar() {
             Artículos compuestos
           </h2>
           <p className="mt-1 text-sm text-texto-secundario">
-            En la propuesta cada uno sale como un solo artículo, con su foto y su nombre, y debajo sus partidas. Precios y totales no cambian.
+            En la propuesta cada uno sale como un solo artículo, con su foto y su nombre, y debajo sus partidas. Si le cambias el precio, el
+            total deja de cuadrar con el PDF del sistema.
           </p>
           <ul className="mt-4 divide-y divide-borde">
             {cotizacion.compuestos.map((compuesto) => {
@@ -394,7 +398,12 @@ export function Revisar() {
                       {partidas.map((p) => `${cantidad(p.cantidad)} × ${p.codigo_origen || p.descripcion_origen}`).join(' + ')}
                     </p>
                   </div>
-                  <span className="tabular-nums">{dinero(partidas.reduce((suma, p) => suma + p.importe, 0))}</span>
+                  <span className="text-right tabular-nums">
+                    {dinero(compuesto.importe)}
+                    {Math.abs(compuesto.importe - compuesto.importe_partidas) >= 0.005 && (
+                      <span className="block text-xs text-alerta-texto">partidas: {dinero(compuesto.importe_partidas)}</span>
+                    )}
+                  </span>
                   <PildoraEstadoItem estado={compuesto.estado} />
                   <Boton variante="secundario" icono={<Layers className="h-4 w-4" />} onClick={() => setCompuestoAbierto({ id: compuesto.id, pestana: 'fotos' })}>
                     Editar

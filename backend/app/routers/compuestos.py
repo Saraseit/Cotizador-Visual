@@ -19,6 +19,7 @@ from app.db.modelos import (
     CrearCompuesto,
     EditarCompuesto,
     PeticionGenerarCompuesto,
+    PrecioCompuesto,
     ResultadoGeneracion,
 )
 from app.routers.catalogo import con_urls
@@ -60,6 +61,17 @@ async def _compuesto(db: Any, cotizacion_id: UUID, compuesto_id: UUID) -> dict[s
 
 def _partidas_de(detalle: CotizacionDetalle, compuesto_id: UUID) -> list[CotizacionItem]:
     return [i for i in detalle.items if i.compuesto_id == compuesto_id]
+
+
+def _columnas_precio(precio: PrecioCompuesto, partidas: list[CotizacionItem]) -> dict[str, Any]:
+    """Columnas de precio del compuesto. La partida cuyo precio se queda tiene que ser del compuesto."""
+    if precio.precio_modo == "partida" and precio.precio_item_id not in {p.id for p in partidas}:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "El precio tiene que ser el de una de las partidas del artículo.")
+    return {
+        "precio_modo": precio.precio_modo,
+        "precio_item_id": str(precio.precio_item_id) if precio.precio_modo == "partida" else None,
+        "precio_manual": round(precio.precio_manual, 2) if precio.precio_modo == "manual" else None,
+    }
 
 
 async def _imagen(db: Any, imagen_id: UUID) -> dict[str, Any]:
@@ -147,7 +159,8 @@ async def _guardar_en_galerias(
 async def crear_compuesto(
     cotizacion_id: UUID, cuerpo: CrearCompuesto, usuario: Usuario, db: ClienteDB, storage: StorageDep
 ) -> CotizacionDetalle:
-    """Combina partidas en un artículo compuesto. Precios y cantidades no cambian."""
+    """Combina partidas en un artículo compuesto. Sus partidas no cambian; el precio que se presenta
+    es la suma de ellas, el de una de ellas o uno escrito por el vendedor (`precio`)."""
     await _cotizacion_editable(db, cotizacion_id, usuario)
     detalle = await cargar_detalle(db, storage, cotizacion_id)
     ids = list(dict.fromkeys(cuerpo.item_ids))
@@ -173,6 +186,7 @@ async def crear_compuesto(
                 "cotizacion_id": str(cotizacion_id),
                 "nombre": cuerpo.nombre.strip() or nombre_por_defecto(partidas),
                 "imagen_id": str(imagen_id) if imagen_id else None,
+                **_columnas_precio(cuerpo.precio, partidas),
             }
         )
         .execute()
@@ -198,7 +212,7 @@ async def editar_compuesto(
     db: ClienteDB,
     storage: StorageDep,
 ) -> CotizacionDetalle:
-    """Cambia el nombre o la foto del compuesto.
+    """Cambia el nombre, la foto o el precio del compuesto.
 
     Con `guardar_en_galerias` la foto (una subida o un render con IA del artículo completo) se copia
     también a la galería de cada SKU del compuesto.
@@ -211,6 +225,8 @@ async def editar_compuesto(
     cambios: dict[str, Any] = {}
     if cuerpo.nombre is not None:
         cambios["nombre"] = cuerpo.nombre.strip() or nombre_por_defecto(partidas)
+    if cuerpo.precio is not None:
+        cambios.update(_columnas_precio(cuerpo.precio, partidas))
     if "imagen_id" in cuerpo.model_fields_set:
         cambios["imagen_id"] = str(cuerpo.imagen_id) if cuerpo.imagen_id else None
         if cuerpo.imagen_id:

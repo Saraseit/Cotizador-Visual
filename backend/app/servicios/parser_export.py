@@ -80,6 +80,9 @@ class ExportLeido:
     advertencias: list[str] = field(default_factory=list)
     # IVA impreso en el PDF del sistema; None si el documento sólo dice "más IVA" (o es un .xlsx).
     iva: Decimal | None = None
+    # SubTotal impreso en el PDF del sistema; None si no se encontró (o es un .xlsx). Con él Revisar
+    # avisa cuando la propuesta no cuadra con el documento.
+    subtotal: Decimal | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -410,7 +413,7 @@ def _buscar_iva(renglones: list[list[dict[str, Any]]]) -> Decimal | None:
 
 def _leer_pdf_por_renglones(
     paginas: list[list[list[dict[str, Any]]]], mapeo: dict[str, Any]
-) -> tuple[list[FilaExport], list[str], Decimal | None] | None:
+) -> tuple[list[FilaExport], list[str], Decimal | None, Decimal | None] | None:
     """Lee exports cuyo cuerpo no es una tabla con bordes (como el del sistema de Minimal 4.0).
 
     Cada página: se busca el renglón de encabezados (`pdf.encabezados`, p. ej. "CANT." y "ARTÍCULO")
@@ -538,7 +541,7 @@ def _leer_pdf_por_renglones(
         suma = sum((f.importe if f.importe is not None else f.cantidad * f.precio_unitario) for f in filas)
         if abs(suma - subtotal) > Decimal("0.5"):
             advertencias.append(f"La suma de partidas ({suma}) no coincide con el SubTotal del documento ({subtotal}).")
-    return filas, advertencias, iva
+    return filas, advertencias, iva, subtotal
 
 
 # --- Estrategias de tabla ("lineas" y "texto") -----------------------------------
@@ -633,11 +636,12 @@ def leer_pdf(contenido: bytes, mapeo: dict[str, Any]) -> ExportLeido:
         filas: list[FilaExport] | None = None
         advertencias: list[str] = []
         iva: Decimal | None = None
+        subtotal: Decimal | None = None
         usada = ""
         if estrategia in ("auto", "renglones"):
             resultado = _leer_pdf_por_renglones(paginas, mapeo)
             if resultado is not None:
-                filas, advertencias, iva = resultado
+                filas, advertencias, iva, subtotal = resultado
                 usada = "renglones"
             elif estrategia == "renglones":
                 raise ErrorParser(
@@ -667,4 +671,5 @@ def leer_pdf(contenido: bytes, mapeo: dict[str, Any]) -> ExportLeido:
         filas=filas,
         advertencias=advertencias,
         iva=iva,
+        subtotal=subtotal,
     )

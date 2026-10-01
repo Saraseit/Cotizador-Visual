@@ -134,19 +134,22 @@ def construir_contexto(
                 es_render_conceptual=item.es_render_conceptual,
                 es_ad_hoc=item.tipo_item == "ad_hoc",
             )
-        # Compuesto: un renglón con la foto y el nombre del artículo; debajo, sus partidas tal cual.
-        cantidad_comun = renglon.cantidad_comun
+        # Compuesto: un renglón con la foto y el nombre del artículo; debajo, sus partidas. Si el
+        # compuesto tiene otro precio, las partidas van sin importe (ya no suman el del renglón).
+        cantidad = renglon.cantidad
+        con_importes = not renglon.precio_cambiado
         return ItemRender(
             codigo="",
             descripcion=traducir(renglon.compuesto.nombre),
-            cantidad=formatear_cantidad(cantidad_comun) if cantidad_comun is not None else "",
+            cantidad=formatear_cantidad(cantidad) if cantidad is not None else "",
             precio_unitario=dinero(renglon.precio_unitario) if renglon.precio_unitario is not None else "",
             importe=dinero(renglon.importe),
             imagen_data_uri=data_uris.get(str(imagen_id)) if imagen_id else None,
             es_render_conceptual=renglon.es_render_conceptual,
             es_ad_hoc=False,
             componentes=[
-                (i.codigo_origen, descripcion(i), formatear_cantidad(i.cantidad), dinero(i.importe)) for i in renglon.items
+                (i.codigo_origen, descripcion(i), formatear_cantidad(i.cantidad), dinero(i.importe) if con_importes else "")
+                for i in renglon.items
             ],
         )
 

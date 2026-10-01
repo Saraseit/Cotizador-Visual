@@ -1,4 +1,4 @@
-"""Artículos compuestos: varias partidas presentadas como un artículo, sin tocar precios ni totales."""
+"""Artículos compuestos: varias partidas presentadas como un artículo, su precio y el cuadre con el PDF."""
 
 from io import BytesIO
 from uuid import uuid4
@@ -98,7 +98,7 @@ def test_nombre_por_defecto_y_prompt():
 
 
 def test_pdf_base_imprime_un_renglon_con_sus_componentes_y_los_mismos_totales():
-    detalle, compuesto = _detalle()
+    detalle, _ = _detalle()
     contexto = construir_contexto(detalle, {})
     assert contexto["total_items"] == 3
     renglon = contexto["items"][1]
@@ -149,3 +149,87 @@ async def test_proveedor_simulado_combina_las_piezas():
     assert len(salidas) == 2
     imagen = Image.open(BytesIO(salidas[0]))
     assert imagen.size == (1024, 1024)
+
+
+# ---------------------------------------------------------------------------
+# Precio del compuesto y cuadre contra el PDF del sistema
+# ---------------------------------------------------------------------------
+
+
+def _con_precio(modo: str, **datos) -> tuple[CotizacionDetalle, Compuesto]:
+    detalle, compuesto = _detalle()
+    compuesto.precio_modo = modo  # type: ignore[assignment]
+    for clave, valor in datos.items():
+        setattr(compuesto, clave, valor)
+    return detalle, compuesto
+
+
+def _renglon(detalle):
+    return compuestos.renglones([i for i in detalle.items if not i.cargo], detalle.compuestos)[1]
+
+
+def test_se_queda_el_precio_de_una_partida():
+    detalle, compuesto = _detalle()
+    compuesto.precio_modo, compuesto.precio_item_id = "partida", detalle.items[1].id  # la cubierta
+    renglon = _renglon(detalle)
+    assert (renglon.cantidad, renglon.precio_unitario, renglon.importe) == (10, 150, 1500)
+    assert renglon.importe_partidas == 2700 and renglon.precio_cambiado
+
+
+def test_precio_manual_por_articulo():
+    detalle, _ = _con_precio("manual", precio_manual=200)
+    renglon = _renglon(detalle)
+    assert (renglon.cantidad, renglon.precio_unitario, renglon.importe) == (10, 200, 2000)
+
+
+def test_partida_ajena_vuelve_a_la_suma():
+    detalle, _ = _con_precio("partida", precio_item_id=uuid4())
+    assert _renglon(detalle).modo == "suma" and _renglon(detalle).importe == 2700
+
+
+def test_con_la_suma_cuadra_con_el_documento():
+    detalle, _ = _detalle()
+    totales = compuestos.totales(detalle.items, detalle.compuestos, 1600)
+    cuadre = compuestos.cuadre(detalle.items, detalle.compuestos, totales["total"], 10_000, 1600)
+    assert totales["subtotal"] == 8000 and totales["iva"] == 1600
+    assert cuadre.cuadra and cuadre.diferencia == 0 and cuadre.ajustes == []
+
+
+def test_otro_precio_cambia_total_ajusta_iva_y_no_cuadra():
+    detalle, _ = _con_precio("manual", precio_manual=200)  # 2,000 en vez de 2,700
+    totales = compuestos.totales(detalle.items, detalle.compuestos, 1600)
+    assert totales["subtotal"] == 7300
+    assert totales["iva"] == round(1600 * 9300 / 10000, 2)  # base del documento: 8,000 + 2,000 de flete
+    cuadre = compuestos.cuadre(detalle.items, detalle.compuestos, totales["total"], 10_000, 1600)
+    assert not cuadre.cuadra
+    assert cuadre.total_documento == 11_600 and cuadre.diferencia == round(totales["total"] - 11_600, 2)
+    assert [(a.nombre, a.importe_partidas, a.importe) for a in cuadre.ajustes] == [("MESA REDONDA COMPLETA", 2700, 2000)]
+
+
+def test_partida_mal_leida_no_cuadra_aunque_no_haya_compuestos():
+    detalle, _ = _detalle()
+    # El PDF dice SubTotal 10,500 pero las partidas leídas (mobiliario y flete) suman 10,000.
+    totales = compuestos.totales(detalle.items, detalle.compuestos, None)
+    cuadre = compuestos.cuadre(detalle.items, detalle.compuestos, totales["total"], 10_500, None)
+    assert not cuadre.cuadra and cuadre.diferencia == -500 and cuadre.ajustes == []
+
+
+def test_sin_subtotal_del_documento_se_compara_con_las_partidas():
+    detalle, _ = _detalle()
+    totales = compuestos.totales(detalle.items, detalle.compuestos, None)
+    assert compuestos.cuadre(detalle.items, detalle.compuestos, totales["total"], None, None).cuadra
+
+
+def test_pdf_base_con_otro_precio_no_muestra_importes_de_las_partidas():
+    detalle, _ = _con_precio("manual", precio_manual=200)
+    detalle.subtotal = 7300
+    renglon = construir_contexto(detalle, {})["items"][1]
+    assert renglon.importe == "$2,000.00" and renglon.precio_unitario == "$200.00"
+    assert all(c[3] == "" for c in renglon.componentes)
+
+
+def test_presentacion_usa_el_importe_presentado():
+    detalle, _ = _con_precio("manual", precio_manual=200)
+    config = pres.config_por_defecto(detalle)
+    vistas = pres.secciones_vista(config, detalle)
+    assert vistas[1].importe == 2000

@@ -96,9 +96,9 @@ cotizador-visual/
 │       ├── componentes/
 │       ├── api/                  # cliente HTTP tipado + hooks de TanStack Query
 │       └── lib/                  # supabase, sesión, formato
-└── supabase/migrations/          # 12 migraciones: esquema, RLS, buckets, catálogo, generaciones, linter,
+└── supabase/migrations/          # 13 migraciones: esquema, RLS, buckets, catálogo, generaciones, linter,
                                   # orden y cargos, presentaciones, historial de PDF, plantillas y paletas,
-                                  # artículos compuestos
+                                  # artículos compuestos y su precio
 ```
 
 ## Correr en local

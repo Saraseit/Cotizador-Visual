@@ -16,6 +16,7 @@ import type {
   ParametrosPlantilla,
   PdfGenerado,
   PerfilYo,
+  PrecioCompuesto,
   Plantilla,
   Presentacion,
   ResultadoCargaTexto,
@@ -117,12 +118,12 @@ export const api = {
       peticion<CotizacionDetalle>(`/cotizaciones/${cotizacionId}/items/${itemId}/descripcion`, json({ descripcion }, 'PATCH')),
   },
   compuestos: {
-    crear: (cotizacionId: string, cuerpo: { item_ids: string[]; nombre?: string; imagen_id?: string | null }) =>
+    crear: (cotizacionId: string, cuerpo: { item_ids: string[]; nombre?: string; imagen_id?: string | null; precio?: PrecioCompuesto }) =>
       peticion<CotizacionDetalle>(`/cotizaciones/${cotizacionId}/compuestos`, json(cuerpo)),
     editar: (
       cotizacionId: string,
       compuestoId: string,
-      cambios: { nombre?: string; imagen_id?: string | null; guardar_en_galerias?: boolean },
+      cambios: { nombre?: string; imagen_id?: string | null; guardar_en_galerias?: boolean; precio?: PrecioCompuesto },
     ) => peticion<CotizacionDetalle>(`/cotizaciones/${cotizacionId}/compuestos/${compuestoId}`, json(cambios, 'PATCH')),
     separar: (cotizacionId: string, compuestoId: string) =>
       peticion<CotizacionDetalle>(`/cotizaciones/${cotizacionId}/compuestos/${compuestoId}`, { method: 'DELETE' }),

@@ -11,7 +11,7 @@ import {
   useSepararCompuesto,
   useSubirImagen,
 } from '@/api/consultas'
-import type { Compuesto, CotizacionItem } from '@/api/tipos'
+import type { Compuesto, CotizacionItem, PrecioCompuesto, PrecioModo } from '@/api/tipos'
 import { Aviso, mensajeDeError } from '@/componentes/Aviso'
 import { Boton } from '@/componentes/Boton'
 import { Campo } from '@/componentes/Campo'
@@ -88,6 +88,138 @@ function TarjetaOpcion({
 }
 
 // ---------------------------------------------------------------------------
+// Precio
+// ---------------------------------------------------------------------------
+
+/** Lo que se edita: el modo, la partida elegida y el precio manual tal como se escribe. */
+interface EstadoPrecio {
+  modo: PrecioModo
+  itemId: string | null
+  manual: string
+}
+
+const estadoDe = (compuesto?: Compuesto): EstadoPrecio => ({
+  modo: compuesto?.precio_modo ?? 'suma',
+  itemId: compuesto?.precio_item_id ?? null,
+  manual: compuesto?.precio_manual != null ? String(compuesto.precio_manual) : '',
+})
+
+const precioManual = (texto: string) => {
+  const valor = Number(texto.replace(/[$,\s]/g, ''))
+  return texto.trim() && Number.isFinite(valor) && valor >= 0 ? valor : null
+}
+
+/** Para mandar al backend; null si falta el dato del modo elegido. */
+function precioDe(estado: EstadoPrecio): PrecioCompuesto | null {
+  if (estado.modo === 'partida') return estado.itemId ? { precio_modo: 'partida', precio_item_id: estado.itemId } : null
+  if (estado.modo === 'manual') {
+    const valor = precioManual(estado.manual)
+    return valor === null ? null : { precio_modo: 'manual', precio_manual: valor }
+  }
+  return { precio_modo: 'suma' }
+}
+
+/** Mismo cálculo que el backend (`servicios/compuestos.Renglon`): cantidad e importe que se presentan. */
+function calcular(estado: EstadoPrecio, partidas: CotizacionItem[]) {
+  const suma = partidas.reduce((total, p) => total + p.importe, 0)
+  const cantidades = new Set(partidas.map((p) => p.cantidad))
+  const comun = cantidades.size === 1 ? partidas[0].cantidad : null
+  if (estado.modo === 'partida') {
+    const partida = partidas.find((p) => p.id === estado.itemId)
+    if (partida) return { suma, cantidad: partida.cantidad, unitario: partida.precio_unitario, importe: partida.cantidad * partida.precio_unitario }
+  }
+  if (estado.modo === 'manual') {
+    const valor = precioManual(estado.manual)
+    const cantidadArticulos = comun ?? partidas[0].cantidad
+    if (valor !== null) return { suma, cantidad: cantidadArticulos, unitario: valor, importe: cantidadArticulos * valor }
+    return { suma, cantidad: cantidadArticulos, unitario: null, importe: null }
+  }
+  const unitario = comun !== null ? partidas.reduce((total, p) => total + p.precio_unitario, 0) : null
+  return { suma, cantidad: comun, unitario, importe: suma }
+}
+
+function OpcionPrecio({ activa, onClick, children }: { activa: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <label className={`flex cursor-pointer items-start gap-3 rounded-boton border px-3 py-2 text-sm ${activa ? 'border-acento bg-acento-suave/40' : 'border-borde'}`}>
+      <input type="radio" className="mt-1 accent-acento" checked={activa} onChange={onClick} />
+      <div className="min-w-0 flex-1">{children}</div>
+    </label>
+  )
+}
+
+/**
+ * Qué precio presenta el compuesto: la suma de sus partidas (cuadra con el PDF del sistema), el de una
+ * de ellas o uno escrito por el vendedor. Las partidas en sí no cambian.
+ */
+function SelectorPrecio({
+  partidas,
+  estado,
+  alCambiar,
+  dinero,
+}: {
+  partidas: CotizacionItem[]
+  estado: EstadoPrecio
+  alCambiar: (estado: EstadoPrecio) => void
+  dinero: (valor: number) => string
+}) {
+  const calculo = calcular(estado, partidas)
+  const sumaUnitaria = calcular({ modo: 'suma', itemId: null, manual: '' }, partidas).unitario
+  const diferencia = calculo.importe !== null ? calculo.importe - calculo.suma : 0
+
+  return (
+    <div>
+      <p className="text-sm font-medium">Precio del artículo</p>
+      <div className="mt-2 flex flex-col gap-2" role="radiogroup" aria-label="Precio del artículo">
+        <OpcionPrecio activa={estado.modo === 'suma'} onClick={() => alCambiar({ ...estado, modo: 'suma' })}>
+          <span>Suma de las partidas</span>
+          <span className="ml-2 tabular-nums text-texto-secundario">
+            {sumaUnitaria !== null && `${dinero(sumaUnitaria)} c/u · `}
+            {dinero(calculo.suma)}
+          </span>
+          <p className="text-xs text-texto-secundario">Cuadra con el PDF del sistema.</p>
+        </OpcionPrecio>
+        {partidas.map((p) => (
+          <OpcionPrecio
+            key={p.id}
+            activa={estado.modo === 'partida' && estado.itemId === p.id}
+            onClick={() => alCambiar({ ...estado, modo: 'partida', itemId: p.id })}
+          >
+            <span>Sólo el precio de {descripcion(p)}</span>
+            <span className="ml-2 tabular-nums text-texto-secundario">
+              {dinero(p.precio_unitario)} c/u · {cantidad(p.cantidad)} = {dinero(p.importe)}
+            </span>
+          </OpcionPrecio>
+        ))}
+        <OpcionPrecio activa={estado.modo === 'manual'} onClick={() => alCambiar({ ...estado, modo: 'manual' })}>
+          <span>Otro precio por artículo</span>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <input
+              inputMode="decimal"
+              className="w-36"
+              placeholder="0.00"
+              aria-label="Precio por artículo en pesos"
+              value={estado.manual}
+              onFocus={() => estado.modo !== 'manual' && alCambiar({ ...estado, modo: 'manual' })}
+              onChange={(e) => alCambiar({ ...estado, modo: 'manual', manual: e.target.value })}
+            />
+            <span className="text-xs text-texto-secundario">
+              pesos por artículo
+              {estado.modo === 'manual' && calculo.importe !== null && ` · ${cantidad(calculo.cantidad ?? 0)} = ${dinero(calculo.importe)}`}
+            </span>
+          </div>
+        </OpcionPrecio>
+      </div>
+      {estado.modo !== 'suma' && calculo.importe !== null && Math.abs(diferencia) >= 0.005 && (
+        <p className="mt-2 text-xs font-medium text-alerta-texto">
+          Con este precio la propuesta deja de cuadrar con el PDF del sistema ({diferencia > 0 ? '+' : '−'}
+          {dinero(Math.abs(diferencia))} antes de IVA).
+        </p>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Combinar
 // ---------------------------------------------------------------------------
 
@@ -108,6 +240,8 @@ export function CombinarArticulos({ cotizacionId, partidas, dinero, alCerrar, al
   const crear = useCrearCompuesto(cotizacionId)
   const conFoto = partidas.filter((p) => p.imagen)
   const [nombre, setNombre] = useState('')
+  const [precio, setPrecio] = useState<EstadoPrecio>(estadoDe())
+  const precioListo = precioDe(precio)
   const [eleccion, setEleccion] = useState<Eleccion>(
     conFoto[0]?.imagen_id ? { tipo: 'partida', imagenId: conFoto[0].imagen_id } : { tipo: 'subir' },
   )
@@ -119,6 +253,7 @@ export function CombinarArticulos({ cotizacionId, partidas, dinero, alCerrar, al
         item_ids: partidas.map((p) => p.id),
         nombre: nombre.trim(),
         imagen_id: eleccion.tipo === 'partida' ? eleccion.imagenId : null,
+        precio: precioListo ?? { precio_modo: 'suma' },
       },
       {
         onSuccess: (detalle) => {
@@ -134,8 +269,8 @@ export function CombinarArticulos({ cotizacionId, partidas, dinero, alCerrar, al
     <Modal abierto titulo="Combinar en un artículo" subtitulo={`${partidas.length} partidas`} alCerrar={alCerrar}>
       <div className="flex flex-col gap-5">
         <Aviso tono="info">
-          En la propuesta saldrán como un solo artículo, con una foto y este nombre, y debajo cada partida con su código. Las cantidades,
-          los precios y los totales no cambian.
+          En la propuesta saldrán como un solo artículo, con una foto y este nombre, y debajo cada partida con su código. Por defecto el
+          precio es la suma de las partidas; puedes dejar sólo el de una o escribir otro.
         </Aviso>
 
         <ListaPartidas partidas={partidas} dinero={dinero} />
@@ -143,6 +278,8 @@ export function CombinarArticulos({ cotizacionId, partidas, dinero, alCerrar, al
         <Campo etiqueta="Nombre del artículo" ayuda="Vacío = las descripciones de las partidas unidas.">
           <input value={nombre} maxLength={200} placeholder={nombrePorDefecto(partidas)} onChange={(e) => setNombre(e.target.value)} />
         </Campo>
+
+        <SelectorPrecio partidas={partidas} estado={precio} alCambiar={setPrecio} dinero={dinero} />
 
         <div>
           <p className="text-sm font-medium">Foto del artículo</p>
@@ -183,7 +320,7 @@ export function CombinarArticulos({ cotizacionId, partidas, dinero, alCerrar, al
           <Boton variante="fantasma" onClick={alCerrar} disabled={crear.isPending}>
             Cancelar
           </Boton>
-          <Boton icono={<Combine className="h-4 w-4" />} cargando={crear.isPending} onClick={combinar}>
+          <Boton icono={<Combine className="h-4 w-4" />} cargando={crear.isPending} disabled={!precioListo} onClick={combinar}>
             {eleccion.tipo === 'partida' ? 'Combinar' : 'Combinar y elegir la foto'}
           </Boton>
         </div>
@@ -211,6 +348,13 @@ export function EditorCompuesto({ cotizacionId, compuesto, partidas, dinero, pes
   const separar = useSepararCompuesto(cotizacionId)
   const [pestana, setPestana] = useState<PestanaCompuesto>(pestanaInicial)
   const [nombre, setNombre] = useState(compuesto.nombre)
+  const [precio, setPrecio] = useState<EstadoPrecio>(estadoDe(compuesto))
+  const precioListo = precioDe(precio)
+  const precioGuardado = estadoDe(compuesto)
+  const precioCambiado =
+    precio.modo !== precioGuardado.modo ||
+    (precio.modo === 'partida' && precio.itemId !== precioGuardado.itemId) ||
+    (precio.modo === 'manual' && precioManual(precio.manual) !== compuesto.precio_manual)
   const galerias = skus(partidas)
 
   /** Las fotos nuevas (subidas o generadas) van además a la galería de cada SKU. */
@@ -246,6 +390,20 @@ export function EditorCompuesto({ cotizacionId, compuesto, partidas, dinero, pes
               </div>
             </Campo>
             <ListaPartidas partidas={partidas} dinero={dinero} />
+          </div>
+        </div>
+
+        <div className="rounded-tarjeta border border-borde p-4">
+          <SelectorPrecio partidas={partidas} estado={precio} alCambiar={setPrecio} dinero={dinero} />
+          <div className="mt-3 flex justify-end">
+            <Boton
+              variante="secundario"
+              disabled={!precioCambiado || !precioListo}
+              cargando={editar.isPending && editar.variables?.precio !== undefined}
+              onClick={() => precioListo && editar.mutate({ compuestoId: compuesto.id, precio: precioListo })}
+            >
+              Guardar precio
+            </Boton>
           </div>
         </div>
 

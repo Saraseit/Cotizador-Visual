@@ -121,8 +121,8 @@ def agrupar_por_seccion(detalle: CotizacionDetalle) -> list[Grupo]:
 
 def piezas_de(renglon: Renglon) -> float:
     """Piezas que cuenta un renglón: un compuesto de 10 cubiertas y 10 bases son 10 mesas."""
-    comun = renglon.cantidad_comun
-    return comun if comun is not None else sum(i.cantidad for i in renglon.items)
+    cantidad = renglon.cantidad
+    return cantidad if cantidad is not None else sum(i.cantidad for i in renglon.items)
 
 
 def titulo_por_defecto(clave: str) -> str:
@@ -178,7 +178,7 @@ def secciones_vista(config: ConfigPresentacion, detalle: CotizacionDetalle) -> l
                 categoria=grupo.clave,
                 partidas=len(filas),
                 piezas=sum(piezas_de(r) for r in filas),
-                importe=round(sum(i.importe for i in grupo.items), 2),
+                importe=round(sum(r.importe for r in filas), 2),
                 con_imagen=sum(1 for i in grupo.items if i.imagen_id),
             )
         )
@@ -462,13 +462,13 @@ def _pieza_compuesta(
     """Un artículo compuesto como una sola pieza: su nombre y su foto, y abajo sus partidas."""
     assert renglon.compuesto is not None
     partes = [_pieza(i, fotos, dinero, traducir) for i in renglon.items]
-    comun = renglon.cantidad_comun
+    cantidad = renglon.cantidad
     imagen_id = renglon.imagen_id
     return PiezaRender(
         nombre=" ".join(traducir(renglon.compuesto.nombre).split()),
         detalle="",
         medidas=" · ".join(p.medidas for p in partes if p.medidas),
-        cantidad=formatear_cantidad(comun) if comun is not None else "",
+        cantidad=formatear_cantidad(cantidad) if cantidad is not None else "",
         precio_unitario=dinero(renglon.precio_unitario) if renglon.precio_unitario is not None else "",
         importe=dinero(renglon.importe),
         foto=fotos.get(str(imagen_id)) if imagen_id else None,

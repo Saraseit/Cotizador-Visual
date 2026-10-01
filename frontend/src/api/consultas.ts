@@ -9,6 +9,7 @@ import type {
   FormatoPropuesta,
   PaletaEntrada,
   ParametrosPlantilla,
+  PrecioCompuesto,
   Presentacion,
   UsuarioActualizacion,
 } from './tipos'
@@ -173,7 +174,7 @@ function useMutacionCompuesto<T>(
 }
 
 export function useCrearCompuesto(cotizacionId: string) {
-  return useMutacionCompuesto(cotizacionId, (cuerpo: { item_ids: string[]; nombre?: string; imagen_id?: string | null }) =>
+  return useMutacionCompuesto(cotizacionId, (cuerpo: { item_ids: string[]; nombre?: string; imagen_id?: string | null; precio?: PrecioCompuesto }) =>
     api.compuestos.crear(cotizacionId, cuerpo),
   )
 }
@@ -184,6 +185,7 @@ interface CambiosCompuesto {
   imagen_id?: string | null
   /** Copia la foto a la galería de cada SKU del compuesto (fotos nuevas del artículo completo). */
   guardar_en_galerias?: boolean
+  precio?: PrecioCompuesto
 }
 
 export function useEditarCompuesto(cotizacionId: string) {

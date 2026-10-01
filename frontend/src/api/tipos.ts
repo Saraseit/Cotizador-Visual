@@ -162,10 +162,52 @@ export interface Compuesto {
   cotizacion_id: string
   nombre: string
   imagen_id: string | null
+  precio_modo: PrecioModo
+  precio_item_id: string | null
+  /** Precio unitario escrito por el vendedor (modo 'manual'). */
+  precio_manual: number | null
   imagen: Imagen | null
   estado: EstadoItem
   /** Partidas que lo forman, en el orden de impresión. */
   item_ids: string[]
+  /** Lo que se presenta. null = partidas con cantidades distintas (sólo en 'suma'). */
+  cantidad: number | null
+  precio_unitario: number | null
+  importe: number
+  /** Lo que suman sus partidas en el PDF del sistema. */
+  importe_partidas: number
+}
+
+/**
+ * Precio del compuesto: la suma de sus partidas, el de una de ellas o uno escrito por el vendedor.
+ * Fuera de 'suma' la propuesta deja de cuadrar con el PDF del sistema.
+ */
+export type PrecioModo = 'suma' | 'partida' | 'manual'
+
+export interface PrecioCompuesto {
+  precio_modo: PrecioModo
+  precio_item_id?: string | null
+  precio_manual?: number | null
+}
+
+export interface AjustePrecio {
+  compuesto_id: string
+  nombre: string
+  importe_partidas: number
+  importe: number
+}
+
+/** Total de la propuesta contra el del PDF del sistema que se subió. */
+export interface Cuadre {
+  cuadra: boolean
+  total_documento: number
+  total_propuesta: number
+  diferencia: number
+  /** SubTotal impreso en el PDF; null si no se encontró (o el export es .xlsx). */
+  subtotal_documento: number | null
+  /** Suma de las partidas leídas del PDF (mobiliario y cargos). */
+  suma_partidas: number
+  ajustes: AjustePrecio[]
 }
 
 export interface CotizacionResumen {
@@ -192,6 +234,7 @@ export interface CotizacionDetalle extends CotizacionResumen {
   total: number
   /** Sólo en la respuesta de subir: fotos nuevas del PDF guardadas en la biblioteca. */
   fotos_importadas?: number
+  cuadre: Cuadre
 }
 
 // --- Presentación editorial --------------------------------------------------

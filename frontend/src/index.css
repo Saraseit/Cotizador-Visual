@@ -23,6 +23,10 @@
     --resuelto-texto: 35 87 65; /* #235741 */
     --conceptual-fondo: 243 229 222; /* #F3E5DE */
     --conceptual-texto: 122 61 34; /* #7A3D22 */
+    /* Rojo de alerta: la propuesta no cuadra con el PDF del sistema. */
+    --alerta-fondo: 254 236 236; /* #FEECEC */
+    --alerta-texto: 168 22 22; /* #A81616 */
+    --alerta-borde: 236 150 150; /* #EC9696 */
   }
 
   :root.dark {
@@ -43,6 +47,9 @@
     --resuelto-texto: 127 203 163; /* #7FCBA3 */
     --conceptual-fondo: 53 33 26; /* #35211A */
     --conceptual-texto: 235 170 140; /* #EBAA8C */
+    --alerta-fondo: 58 20 20; /* #3A1414 */
+    --alerta-texto: 255 140 140; /* #FF8C8C */
+    --alerta-borde: 122 36 36; /* #7A2424 */
   }
 
   html {

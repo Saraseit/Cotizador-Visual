@@ -37,6 +37,11 @@ export default {
           fondo: color('conceptual-fondo'),
           texto: color('conceptual-texto'),
         },
+        alerta: {
+          fondo: color('alerta-fondo'),
+          texto: color('alerta-texto'),
+          borde: color('alerta-borde'),
+        },
       },
       fontFamily: {
         titulo: ['Fraunces', 'Georgia', 'serif'],
