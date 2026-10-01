@@ -176,7 +176,8 @@ def totales(
     proporción (el sistema lo calcula sobre todo, cargos incluidos).
     """
     partidas = [i for i in sorted(items, key=lambda i: i.orden) if not i.cargo]
-    subtotal = round(sum(r.importe for r in renglones(partidas, compuestos)), 2)
+    filas = renglones(partidas, compuestos)
+    subtotal = round(sum(r.importe for r in filas), 2)
     flete = round(sum(i.importe for i in items if i.cargo == "flete"), 2)
     montaje = round(sum(i.importe for i in items if i.cargo == "montaje"), 2)
     base_documento = sum(i.importe for i in items)
@@ -193,8 +194,9 @@ def totales(
         "montaje": montaje,
         "iva": iva,
         "total": round(base + (iva or 0), 2),
-        "total_items": len(partidas),
-        "items_pendientes": sum(1 for i in partidas if i.estado == "falta_imagen"),
+        # Un compuesto cuenta como un ítem (sus partidas ya no se ven por separado en Revisar).
+        "total_items": len(filas),
+        "items_pendientes": sum(1 for r in filas if r.primero.estado == "falta_imagen"),
     }
 
 

@@ -79,10 +79,20 @@ def _resumen_desde_fila(fila: dict[str, Any]) -> CotizacionResumen:
             return bool(imagen_compuesto[str(compuesto)])
         return bool(item.get("imagen_id"))
 
+    # Un compuesto cuenta como un ítem: se cuenta una vez, por su primera partida.
+    vistos: set[str] = set()
+    unidades = []
+    for item in items:
+        compuesto = str(item.get("compuesto_id")) if item.get("compuesto_id") else None
+        if compuesto and compuesto in imagen_compuesto:
+            if compuesto in vistos:
+                continue
+            vistos.add(compuesto)
+        unidades.append(item)
     return CotizacionResumen(
         **datos,
-        total_items=len(items),
-        items_pendientes=sum(1 for i in items if not con_imagen(i)),
+        total_items=len(unidades),
+        items_pendientes=sum(1 for i in unidades if not con_imagen(i)),
         cuadre=_cuadre_de_fila(fila),
     )
 

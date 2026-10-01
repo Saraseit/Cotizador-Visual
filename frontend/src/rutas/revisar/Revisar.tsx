@@ -22,6 +22,32 @@ type Filtro = 'pendientes' | 'todos'
 
 const columna = createColumnHelper<CotizacionItem>()
 
+/** La fila de un compuesto en la tabla lleva este prefijo en su id: no es una partida real. */
+const PREFIJO_COMPUESTO = 'compuesto:'
+const compuestoDeFila = (filaId: string) => (filaId.startsWith(PREFIJO_COMPUESTO) ? filaId.slice(PREFIJO_COMPUESTO.length) : null)
+
+/** Fila que representa un compuesto: su foto, nombre, cantidad y precio, en el lugar de su primera partida. */
+function filaDeCompuesto(compuesto: Compuesto, partidas: CotizacionItem[]): CotizacionItem {
+  return {
+    ...partidas[0],
+    id: `${PREFIJO_COMPUESTO}${compuesto.id}`,
+    item_id: null,
+    item: null,
+    tipo_item: 'catalogo',
+    codigo_origen: partidas.map((p) => p.codigo_origen).filter(Boolean).join(' + '),
+    descripcion_origen: compuesto.nombre,
+    descripcion_editada: '',
+    cantidad: compuesto.cantidad ?? 0,
+    precio_unitario: compuesto.precio_unitario ?? 0,
+    imagen_id: compuesto.imagen_id,
+    imagen: compuesto.imagen,
+    es_render_conceptual: compuesto.imagen?.tipo === 'generada',
+    estado: compuesto.estado,
+    importe: compuesto.importe,
+    compuesto_id: compuesto.id,
+  }
+}
+
 /** Partida normal o cargo (flete/montaje). Los cargos no se imprimen como partida: se suman abajo. */
 function SelectorTipo({ item, alCambiar, ocupado }: { item: CotizacionItem; alCambiar: (cargo: Cargo | null) => void; ocupado: boolean }) {
   return (
@@ -65,16 +91,39 @@ export function Revisar() {
   const total = cotizacion?.total_items ?? 0
   const resueltos = total - pendientes
 
-  // Flete y montaje no son partidas: no se revisan ni se ordenan, se suman en los totales.
-  // "Todos" sigue el orden de impresión (el que se arrastra); "Pendientes" sólo las que faltan.
-  const filas = useMemo(() => {
-    const partidas = (cotizacion?.items ?? []).filter((i) => !i.cargo).sort((a, b) => a.orden - b.orden)
-    return filtro === 'pendientes' ? partidas.filter((i) => i.estado === 'falta_imagen') : partidas
-  }, [cotizacion, filtro])
-  const cargos = useMemo(() => (cotizacion?.items ?? []).filter((i) => i.cargo), [cotizacion])
   const compuestos = useMemo(() => new Map((cotizacion?.compuestos ?? []).map((c) => [c.id, c])), [cotizacion])
   const partidasDe = (compuesto: Compuesto) =>
     (cotizacion?.items ?? []).filter((i) => i.compuesto_id === compuesto.id).sort((a, b) => a.orden - b.orden)
+
+  // Flete y montaje no son partidas: no se revisan ni se ordenan, se suman en los totales.
+  // Las partidas de un compuesto no se ven sueltas: el compuesto ocupa una sola fila, en el lugar de su
+  // primera partida, y se mueve como cualquier otra. Al separarlo vuelven a aparecer.
+  // "Todos" sigue el orden de impresión (el que se arrastra); "Pendientes" sólo las que faltan.
+  const filas = useMemo(() => {
+    const partidas = (cotizacion?.items ?? []).filter((i) => !i.cargo).sort((a, b) => a.orden - b.orden)
+    const porCompuesto = new Map((cotizacion?.compuestos ?? []).map((c) => [c.id, c]))
+    const vistos = new Set<string>()
+    const unidades: CotizacionItem[] = []
+    for (const partida of partidas) {
+      const compuesto = partida.compuesto_id ? porCompuesto.get(partida.compuesto_id) : undefined
+      if (!compuesto) unidades.push(partida)
+      else if (!vistos.has(compuesto.id)) {
+        vistos.add(compuesto.id)
+        unidades.push(filaDeCompuesto(compuesto, partidas.filter((p) => p.compuesto_id === compuesto.id)))
+      }
+    }
+    return filtro === 'pendientes' ? unidades.filter((i) => i.estado === 'falta_imagen') : unidades
+  }, [cotizacion, filtro])
+  const cargos = useMemo(() => (cotizacion?.items ?? []).filter((i) => i.cargo), [cotizacion])
+
+  /** Al reordenar, la fila del compuesto se expande a sus partidas (que quedan juntas). */
+  const alReordenar = (ids: string[]) =>
+    reordenar.mutate(
+      ids.flatMap((filaId) => {
+        const compuesto = compuestoDeFila(filaId) ? compuestos.get(compuestoDeFila(filaId) as string) : undefined
+        return compuesto ? partidasDe(compuesto).map((p) => p.id) : [filaId]
+      }),
+    )
 
   const alternarSeleccion = (itemId: string) =>
     setSeleccion((actual) => {
@@ -86,72 +135,100 @@ export function Revisar() {
 
   const { mutate: mutarCargo, isPending: cambiandoCargo } = asignarCargo
   const columnas = useMemo(
-    () => [
+    () => {
+      const compuestoDe = (item: CotizacionItem) => {
+        const compuestoId = compuestoDeFila(item.id)
+        return compuestoId ? compuestos.get(compuestoId) : undefined
+      }
+      const abrirCompuesto = (compuesto: Compuesto) => setCompuestoAbierto({ id: compuesto.id, pestana: 'fotos' })
+      return [
       columna.display({
         id: 'miniatura',
         header: 'Imagen',
         cell: ({ row }) => {
           // La casilla marca la partida para combinarla en un artículo compuesto.
-          // Las partidas de un compuesto se imprimen con la foto del compuesto.
-          const compuesto = row.original.compuesto_id ? compuestos.get(row.original.compuesto_id) : undefined
+          const compuesto = compuestoDe(row.original)
           return (
             <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                className="h-4 w-4 accent-acento"
-                checked={seleccion.has(row.original.id)}
-                disabled={Boolean(compuesto)}
-                onChange={() => alternarSeleccion(row.original.id)}
-                aria-label={`Marcar ${row.original.descripcion_origen} para combinar`}
-                title={compuesto ? 'Ya es parte de un artículo compuesto' : 'Marcar para combinar en un artículo'}
-              />
               {compuesto ? (
-                <Miniatura url={compuesto.imagen?.url} conceptual={compuesto.imagen?.tipo === 'generada'} alt={compuesto.nombre} />
+                <span className="w-4" aria-hidden />
               ) : (
-                <Miniatura url={row.original.imagen?.url} conceptual={row.original.es_render_conceptual} alt={row.original.descripcion_origen} />
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-acento"
+                  checked={seleccion.has(row.original.id)}
+                  onChange={() => alternarSeleccion(row.original.id)}
+                  aria-label={`Marcar ${row.original.descripcion_origen} para combinar`}
+                  title="Marcar para combinar en un artículo"
+                />
               )}
+              <Miniatura url={row.original.imagen?.url} conceptual={row.original.es_render_conceptual} alt={row.original.descripcion_origen} />
             </div>
           )
         },
       }),
       columna.accessor('codigo_origen', {
         header: 'Código',
-        cell: ({ getValue, row }) => (
-          <div>
-            <span className="font-medium">{getValue() || '—'}</span>
-            {row.original.tipo_item === 'ad_hoc' && <p className="text-xs text-texto-secundario">Fuera de catálogo</p>}
-          </div>
-        ),
+        cell: ({ getValue, row }) => {
+          const compuesto = compuestoDe(row.original)
+          return (
+            <div>
+              {compuesto ? (
+                <span className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-acento">
+                  <Layers className="h-3.5 w-3.5" aria-hidden /> Compuesto
+                </span>
+              ) : (
+                <span className="font-medium">{getValue() || '—'}</span>
+              )}
+              {row.original.tipo_item === 'ad_hoc' && !compuesto && <p className="text-xs text-texto-secundario">Fuera de catálogo</p>}
+            </div>
+          )
+        },
       }),
       columna.accessor('descripcion_origen', {
         header: 'Descripción',
         cell: ({ row }) => {
-          const compuesto = row.original.compuesto_id ? compuestos.get(row.original.compuesto_id) : undefined
+          const compuesto = compuestoDe(row.original)
+          if (!compuesto) {
+            return <DescripcionEditable item={row.original} cotizacionId={id ?? ''} traduccion={traducciones[row.original.descripcion_origen]} />
+          }
           return (
-            <>
-              <DescripcionEditable item={row.original} cotizacionId={id ?? ''} traduccion={traducciones[row.original.descripcion_origen]} />
-              {compuesto && (
-                <button
-                  type="button"
-                  onClick={() => setCompuestoAbierto({ id: compuesto.id, pestana: 'fotos' })}
-                  className="mt-1 flex max-w-md items-center gap-1 text-left text-xs text-acento hover:underline"
-                  title="Parte de un artículo compuesto"
-                >
-                  <Layers className="h-3 w-3 shrink-0" aria-hidden />
-                  <span>Parte de {compuesto.nombre}</span>
-                </button>
-              )}
-            </>
+            <button type="button" onClick={() => abrirCompuesto(compuesto)} className="block max-w-md text-left hover:text-acento">
+              <span>{compuesto.nombre}</span>
+              <span className="block text-xs text-texto-secundario">
+                {partidasDe(compuesto)
+                  .map((p) => `${cantidad(p.cantidad)} × ${p.codigo_origen || p.descripcion_origen}`)
+                  .join(' + ')}
+              </span>
+            </button>
           )
         },
       }),
       columna.accessor('cantidad', {
         header: () => <span className="block text-right">Cantidad</span>,
-        cell: ({ getValue }) => <span className="block text-right tabular-nums">{cantidad(getValue())}</span>,
+        cell: ({ getValue, row }) => {
+          const compuesto = compuestoDe(row.original)
+          const valor = compuesto ? compuesto.cantidad : getValue()
+          return <span className="block text-right tabular-nums">{valor === null ? '—' : cantidad(valor)}</span>
+        },
       }),
       columna.accessor('precio_unitario', {
         header: () => <span className="block text-right">Precio</span>,
-        cell: ({ getValue }) => <span className="block text-right tabular-nums">{dinero(getValue())}</span>,
+        cell: ({ getValue, row }) => {
+          const compuesto = compuestoDe(row.original)
+          if (!compuesto) return <span className="block text-right tabular-nums">{dinero(getValue())}</span>
+          const cambiado = Math.abs(compuesto.importe - compuesto.importe_partidas) >= 0.005
+          return (
+            <span className="block text-right tabular-nums">
+              {compuesto.precio_unitario === null ? '—' : dinero(compuesto.precio_unitario)}
+              {cambiado && (
+                <span className="block text-xs text-alerta-texto" title="Precio distinto al de las partidas en el PDF del sistema">
+                  partidas: {dinero(compuesto.importe_partidas)}
+                </span>
+              )}
+            </span>
+          )
+        },
       }),
       columna.accessor('estado', {
         header: 'Estado',
@@ -160,28 +237,27 @@ export function Revisar() {
       columna.display({
         id: 'tipo',
         header: 'Tipo',
-        cell: ({ row }) => (
-          <SelectorTipo
-            item={row.original}
-            ocupado={cambiandoCargo}
-            alCambiar={(cargo) => mutarCargo({ itemId: row.original.id, cargo })}
-          />
-        ),
+        cell: ({ row }) =>
+          compuestoDe(row.original) ? (
+            <span className="text-sm text-texto-secundario">Artículo</span>
+          ) : (
+            <SelectorTipo
+              item={row.original}
+              ocupado={cambiandoCargo}
+              alCambiar={(cargo) => mutarCargo({ itemId: row.original.id, cargo })}
+            />
+          ),
       }),
       columna.display({
         id: 'accion',
         header: '',
         cell: ({ row }) => {
           const falta = row.original.estado === 'falta_imagen'
-          if (row.original.compuesto_id) {
-            const compuestoId = row.original.compuesto_id
+          const compuesto = compuestoDe(row.original)
+          if (compuesto) {
             return (
-              <Boton
-                variante={falta ? 'primario' : 'secundario'}
-                icono={<Layers className="h-4 w-4" />}
-                onClick={() => setCompuestoAbierto({ id: compuestoId, pestana: 'fotos' })}
-              >
-                Compuesto
+              <Boton variante={falta ? 'primario' : 'secundario'} icono={<Layers className="h-4 w-4" />} onClick={() => abrirCompuesto(compuesto)}>
+                Editar
               </Boton>
             )
           }
@@ -196,7 +272,8 @@ export function Revisar() {
           )
         },
       }),
-    ],
+    ]
+    },
     // `dinero` y `traducciones` dependen de la moneda y el idioma elegidos.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [mutarCargo, cambiandoCargo, id, config?.moneda, config?.tipo_cambio, config?.idioma, traducciones, seleccion, compuestos],
@@ -341,7 +418,7 @@ export function Revisar() {
             filas={tabla.getRowModel().rows}
             columnas={columnasVisibles}
             encabezado={encabezado}
-            alReordenar={(ids) => reordenar.mutate(ids)}
+            alReordenar={alReordenar}
           />
         ) : (
           <table className="w-full text-sm">
@@ -376,44 +453,6 @@ export function Revisar() {
           </table>
         )}
       </div>
-
-      {cotizacion.compuestos.length > 0 && (
-        <section className="tarjeta mt-6 p-5" aria-labelledby="titulo-compuestos">
-          <h2 id="titulo-compuestos" className="text-base font-semibold">
-            Artículos compuestos
-          </h2>
-          <p className="mt-1 text-sm text-texto-secundario">
-            En la propuesta cada uno sale como un solo artículo, con su foto y su nombre, y debajo sus partidas. Si le cambias el precio, el
-            total deja de cuadrar con el PDF del sistema.
-          </p>
-          <ul className="mt-4 divide-y divide-borde">
-            {cotizacion.compuestos.map((compuesto) => {
-              const partidas = partidasDe(compuesto)
-              return (
-                <li key={compuesto.id} className="flex flex-wrap items-center gap-4 py-3 text-sm">
-                  <Miniatura url={compuesto.imagen?.url} conceptual={compuesto.imagen?.tipo === 'generada'} alt={compuesto.nombre} />
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium">{compuesto.nombre}</p>
-                    <p className="truncate text-xs text-texto-secundario">
-                      {partidas.map((p) => `${cantidad(p.cantidad)} × ${p.codigo_origen || p.descripcion_origen}`).join(' + ')}
-                    </p>
-                  </div>
-                  <span className="text-right tabular-nums">
-                    {dinero(compuesto.importe)}
-                    {Math.abs(compuesto.importe - compuesto.importe_partidas) >= 0.005 && (
-                      <span className="block text-xs text-alerta-texto">partidas: {dinero(compuesto.importe_partidas)}</span>
-                    )}
-                  </span>
-                  <PildoraEstadoItem estado={compuesto.estado} />
-                  <Boton variante="secundario" icono={<Layers className="h-4 w-4" />} onClick={() => setCompuestoAbierto({ id: compuesto.id, pestana: 'fotos' })}>
-                    Editar
-                  </Boton>
-                </li>
-              )
-            })}
-          </ul>
-        </section>
-      )}
 
       {filtro === 'todos' && (
         <div className="mt-6 grid gap-6 md:grid-cols-[1fr_20rem]">

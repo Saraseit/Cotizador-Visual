@@ -257,5 +257,12 @@ def test_la_lista_de_propuestas_trae_el_cuadre():
     resumen = _resumen_desde_fila(fila)
     assert not resumen.cuadre.cuadra and resumen.cuadre.diferencia == -1392  # (1,500 + IVA) contra (2,700 + IVA)
     assert [a.nombre for a in resumen.cuadre.ajustes] == ["MESA COMPLETA"]
+    assert resumen.total_items == 1  # el compuesto cuenta como un ítem
     fila["cotizacion_compuestos"][0]["precio_modo"] = "suma"
     assert _resumen_desde_fila(fila).cuadre.cuadra
+
+
+def test_el_compuesto_cuenta_como_un_item():
+    detalle, _ = _detalle()
+    totales = compuestos.totales(detalle.items, detalle.compuestos, None)
+    assert totales["total_items"] == 3  # silla, mesa compuesta y mantel
