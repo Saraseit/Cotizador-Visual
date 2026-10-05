@@ -45,6 +45,21 @@
       letter-spacing: -0.2pt;
     }
     .encabezado .sub { color: #57534A; font-size: 9.5pt; }
+    .encabezado .logotipo { display: block; max-width: 190pt; max-height: 34pt; margin-bottom: 10pt; }
+    .meta .campo { max-width: 230pt; }
+
+    .notas {
+      margin-top: 16pt;
+      font-size: 8.5pt;
+      line-height: 1.5;
+      color: #1A1916;
+      page-break-inside: avoid;
+    }
+    .notas h2 { font-size: 9.5pt; font-weight: 600; margin: 0 0 4pt 0; }
+    .notas p { margin: 0; }
+    .notas .espacio { height: 6pt; }
+    .imagen-pie { margin-top: 18pt; text-align: center; page-break-inside: avoid; }
+    .imagen-pie img { max-width: 100%; max-height: 160pt; }
     .meta { text-align: right; font-size: 9.5pt; line-height: 1.5; }
     .meta strong { display: inline-block; min-width: 62pt; color: #57534A; font-weight: 500; }
 
@@ -154,13 +169,17 @@
 <body>
   <header class="encabezado">
     <div>
-      <h1>{{ t.propuesta_de_mobiliario }}</h1>
-      <div class="sub">{{ t.lema_marca }}</div>
+      {% if logotipo %}<img class="logotipo" src="{{ logotipo }}" alt="">{% endif %}
+      <h1>{{ titulo }}</h1>
+      <div class="sub">{{ subtitulo }}</div>
     </div>
     <div class="meta">
       <div><strong>{{ t.cliente }}</strong> {{ nombre_cliente }}</div>
       <div><strong>{{ t.referencia }}</strong> {{ referencia_externa or "—" }}</div>
       <div><strong>{{ t.fecha }}</strong> {{ fecha }}</div>
+      {% for etiqueta, valor in campos %}
+      <div class="campo"><strong>{{ etiqueta }}</strong> {{ valor }}</div>
+      {% endfor %}
     </div>
   </header>
 
@@ -235,8 +254,19 @@
   </div>
   {% endif %}
 
+  {% if notas %}
+  <section class="notas">
+    {% if notas_titulo %}<h2>{{ notas_titulo }}</h2>{% endif %}
+    {% for renglon in notas %}{% if renglon %}<p>{{ renglon }}</p>{% else %}<p class="espacio"></p>{% endif %}{% endfor %}
+  </section>
+  {% endif %}
+
   <div class="pie">
     {{ nota_moneda }} {{ t.pie_informativo }}
   </div>
+
+  {% if imagen_pie %}
+  <div class="imagen-pie"><img src="{{ imagen_pie }}" alt=""></div>
+  {% endif %}
 </body>
 </html>

@@ -2,6 +2,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from './cliente'
 import type {
+  AjustesPropuesta,
+  AjustesPropuestaEntrada,
+  HuecoMarca,
   Cargo,
   CatalogoItemActualizacion,
   ConfigPresentacionEntrada,
@@ -33,6 +36,7 @@ export const llaves = {
   paletas: ['paletas'] as const,
   resumenBiblioteca: ['biblioteca', 'resumen'] as const,
   usuarios: ['usuarios'] as const,
+  ajustesPropuesta: ['ajustes', 'propuesta'] as const,
 }
 
 // --- Salud ------------------------------------------------------------------
@@ -149,6 +153,43 @@ export function useAsignarCargo(cotizacionId: string) {
     onSettled: (detalle) => alTerminar(detalle),
     onSuccess: () => void cliente.invalidateQueries({ queryKey: llaves.cotizaciones, exact: true }),
   })
+}
+
+/** Valores de los campos extra del PDF (fecha del evento, lugar…) para esta cotización. */
+export function useGuardarCampos(cotizacionId: string) {
+  const alTerminar = useAlTerminarEdicion(cotizacionId)
+  return useMutation({
+    mutationKey: llaveEdicion(cotizacionId),
+    mutationFn: (valores: Record<string, string>) => api.cotizaciones.guardarCampos(cotizacionId, valores),
+    onSettled: (detalle) => alTerminar(detalle),
+  })
+}
+
+// --- Formato del PDF de la propuesta base -------------------------------------
+
+export function useAjustesPropuesta() {
+  return useQuery({ queryKey: llaves.ajustesPropuesta, queryFn: api.ajustes.obtener, staleTime: VIDA_URLS_MS })
+}
+
+/** Todas las respuestas traen los ajustes completos: se guardan tal cual en caché. */
+function useMutacionAjustes<T>(fn: (valor: T) => Promise<AjustesPropuesta>) {
+  const cliente = useQueryClient()
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: (ajustes: AjustesPropuesta) => cliente.setQueryData(llaves.ajustesPropuesta, ajustes),
+  })
+}
+
+export function useGuardarAjustes() {
+  return useMutacionAjustes((entrada: AjustesPropuestaEntrada) => api.ajustes.guardar(entrada))
+}
+
+export function useSubirImagenAjustes() {
+  return useMutacionAjustes(({ hueco, archivo }: { hueco: HuecoMarca; archivo: File }) => api.ajustes.subirImagen(hueco, archivo))
+}
+
+export function useQuitarImagenAjustes() {
+  return useMutacionAjustes((hueco: HuecoMarca) => api.ajustes.quitarImagen(hueco))
 }
 
 // --- Artículos compuestos ---------------------------------------------------

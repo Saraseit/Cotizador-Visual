@@ -20,11 +20,13 @@ from app.db.modelos import (
     CotizacionItem,
     CotizacionResumen,
     EditarDescripcion,
+    GuardarCampos,
     PdfGenerado,
     Reordenar,
     ResultadoPdf,
     calcular_estado_item,
 )
+from app.servicios import ajustes_propuesta
 from app.servicios import compuestos as servicio_compuestos
 from app.servicios import presentacion as servicio_presentacion
 from app.servicios import render_pdf
@@ -461,7 +463,8 @@ async def generar_propuesta(
     detalle = await _armar_detalle(fila, storage, await compuestos_crudos(db, cotizacion_id))
     config = await config_de_presentacion(db, cotizacion_id, detalle)
 
-    pdf = await render_pdf.generar_pdf_cotizacion(detalle, storage, config)
+    ajustes = await ajustes_propuesta.leer(db)
+    pdf = await render_pdf.generar_pdf_cotizacion(detalle, storage, config, ajustes)
 
     marca = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     ruta = f"cotizaciones/{cotizacion_id}/propuestas/propuesta-{marca}.pdf"
@@ -546,4 +549,27 @@ async def asignar_cargo(
     )
     if not actualizado.data:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "El ítem no pertenece a esta cotización.")
+    return await cargar_detalle(db, storage, cotizacion_id)
+
+
+@router.put("/{cotizacion_id}/campos", response_model=CotizacionDetalle)
+async def guardar_campos(
+    cotizacion_id: UUID, cuerpo: GuardarCampos, usuario: Usuario, db: ClienteDB, storage: StorageDep
+) -> CotizacionDetalle:
+    """Valores de los campos extra del PDF (los define un admin en "Formato del PDF") para esta cotización.
+
+    Sólo se guardan los campos que existen; vacío = se imprime el predeterminado (o nada).
+    """
+    cotizacion = await _fila_cotizacion(db, cotizacion_id, "*")
+    _puede_editar(cotizacion, usuario)
+    ajustes = await ajustes_propuesta.leer(db)
+    valores: dict[str, str] = {}
+    try:
+        for campo in ajustes.campos:
+            valor = ajustes_propuesta.validar_valor(campo, cuerpo.valores.get(campo.id, ""))
+            if valor:
+                valores[campo.id] = valor
+    except ValueError as error:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(error)) from error
+    await db.table("cotizaciones").update({"campos": valores}).eq("id", str(cotizacion_id)).execute()
     return await cargar_detalle(db, storage, cotizacion_id)

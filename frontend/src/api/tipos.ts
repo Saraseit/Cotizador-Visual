@@ -223,6 +223,8 @@ export interface CotizacionResumen {
   items_pendientes: number
   /** Total de la propuesta contra el del PDF del sistema (también en la lista de Propuestas). */
   cuadre: Cuadre
+  /** Valores de los campos extra del PDF: id del campo -> texto (fechas AAAA-MM-DD, horas HH:MM). */
+  campos: Record<string, string>
 }
 
 export interface CotizacionDetalle extends CotizacionResumen {
@@ -380,4 +382,36 @@ export interface ResumenBiblioteca {
   total_generaciones_24h: number
   total_sin_imagen: number
   items_sin_imagen: ItemSinImagen[]
+}
+
+// --- Formato del PDF de la propuesta base -------------------------------------
+
+export type TipoCampo = 'texto' | 'fecha' | 'hora'
+export type HuecoMarca = 'logotipo' | 'pie'
+
+/** Campo extra del encabezado (p. ej. "Fecha del evento"); el valor se llena en cada cotización. */
+export interface CampoPropuesta {
+  id: string
+  etiqueta: string
+  tipo: TipoCampo
+  /** Se imprime si la cotización no trae valor. */
+  predeterminado: string
+}
+
+export interface AjustesPropuestaEntrada {
+  /** Vacío = "Propuesta de mobiliario" (y se traduce). */
+  titulo: string
+  subtitulo: string
+  notas_titulo: string
+  notas: string
+  campos: CampoPropuesta[]
+}
+
+export interface AjustesPropuesta extends AjustesPropuestaEntrada {
+  logotipo_ruta: string | null
+  pie_ruta: string | null
+  logotipo_url: string | null
+  pie_url: string | null
+  /** true = no se ha subido logotipo: va el de la marca. */
+  logotipo_de_marca: boolean
 }

@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import obtener_configuracion
 from app.db.cliente import crear_cliente
 from app.routers import (
+    ajustes,
     biblioteca,
     catalogo,
     compuestos,
@@ -60,6 +61,7 @@ def crear_app() -> FastAPI:
         perfil.router,
         cotizaciones.router,
         compuestos.router,
+        ajustes.router,
         presentaciones.router,
         plantillas.router,
         catalogo.router,

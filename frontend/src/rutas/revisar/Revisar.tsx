@@ -3,7 +3,7 @@ import { ArrowRight, Combine, ImagePlus, Layers, RefreshCw } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 
-import { useAsignarCargo, useCotizacion, usePresentacion, useReordenar } from '@/api/consultas'
+import { useAjustesPropuesta, useAsignarCargo, useCotizacion, usePresentacion, useReordenar } from '@/api/consultas'
 import type { Cargo, Compuesto, CotizacionItem } from '@/api/tipos'
 import { Aviso, mensajeDeError } from '@/componentes/Aviso'
 import { AvisoCuadre } from '@/componentes/AvisoCuadre'
@@ -13,6 +13,7 @@ import { PildoraEstadoItem } from '@/componentes/Pildora'
 import { cantidad, formatoDinero } from '@/lib/formato'
 
 import { CombinarArticulos, EditorCompuesto, type PestanaCompuesto } from './ArticuloCompuesto'
+import { CamposPropuesta } from './CamposPropuesta'
 import { DescripcionEditable } from './DescripcionEditable'
 import { FormatoPropuesta } from './FormatoPropuesta'
 import { SelectorImagen } from './SelectorImagen'
@@ -79,6 +80,7 @@ export function Revisar() {
   const [combinando, setCombinando] = useState(false)
   const [compuestoAbierto, setCompuestoAbierto] = useState<{ id: string; pestana: PestanaCompuesto } | null>(null)
   const presentacion = usePresentacion(id)
+  const ajustesPdf = useAjustesPropuesta()
   const reordenar = useReordenar(id ?? '')
   const asignarCargo = useAsignarCargo(id ?? '')
 
@@ -485,6 +487,15 @@ export function Revisar() {
           </section>
 
           <div className="space-y-6">
+            {(ajustesPdf.data?.campos.length ?? 0) > 0 && (
+              <CamposPropuesta
+                // Se reinicia si cambian los campos o lo guardado (p. ej. al volver a cargar la cotización).
+                key={`${ajustesPdf.data?.campos.map((c) => c.id).join()}|${JSON.stringify(cotizacion.campos)}`}
+                cotizacionId={cotizacion.id}
+                campos={ajustesPdf.data?.campos ?? []}
+                valores={cotizacion.campos}
+              />
+            )}
             {config && <FormatoPropuesta cotizacionId={id ?? ''} config={config} />}
 
             <section className="tarjeta p-5" aria-label="Totales de la propuesta">

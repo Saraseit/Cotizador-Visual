@@ -8,6 +8,7 @@ import { Biblioteca } from '@/rutas/biblioteca/Biblioteca'
 import { Catalogo } from '@/rutas/catalogo/Catalogo'
 import { Entrar } from '@/rutas/entrar/Entrar'
 import { Estado } from '@/rutas/estado/Estado'
+import { FormatoPdf } from '@/rutas/formato/FormatoPdf'
 import { Generar } from '@/rutas/generar/Generar'
 import { Presentacion } from '@/rutas/presentacion/Presentacion'
 import { Propuestas } from '@/rutas/propuestas/Propuestas'
@@ -45,6 +46,7 @@ export function App() {
                 <Route path="/biblioteca" element={<Biblioteca />} />
                 <Route path="/usuarios" element={<Usuarios />} />
                 <Route path="/estado" element={<Estado />} />
+                <Route path="/formato-pdf" element={<FormatoPdf />} />
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

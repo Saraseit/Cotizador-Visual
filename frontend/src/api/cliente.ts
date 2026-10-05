@@ -1,6 +1,9 @@
 import { supabase } from '@/lib/supabase'
 
 import type {
+  AjustesPropuesta,
+  AjustesPropuestaEntrada,
+  HuecoMarca,
   Cargo,
   CatalogoItem,
   ConfigPresentacionEntrada,
@@ -113,9 +116,21 @@ export const api = {
       peticion<CotizacionDetalle>(`/cotizaciones/${cotizacionId}/orden`, json({ ids }, 'PUT')),
     asignarCargo: (cotizacionId: string, itemId: string, cargo: Cargo | null) =>
       peticion<CotizacionDetalle>(`/cotizaciones/${cotizacionId}/items/${itemId}/cargo`, json({ cargo }, 'PUT')),
+    guardarCampos: (cotizacionId: string, valores: Record<string, string>) =>
+      peticion<CotizacionDetalle>(`/cotizaciones/${cotizacionId}/campos`, json({ valores }, 'PUT')),
     pdfs: (cotizacionId: string) => peticion<PdfGenerado[]>(`/cotizaciones/${cotizacionId}/pdfs`),
     editarDescripcion: (cotizacionId: string, itemId: string, descripcion: string) =>
       peticion<CotizacionDetalle>(`/cotizaciones/${cotizacionId}/items/${itemId}/descripcion`, json({ descripcion }, 'PATCH')),
+  },
+  ajustes: {
+    obtener: () => peticion<AjustesPropuesta>('/ajustes/propuesta'),
+    guardar: (entrada: AjustesPropuestaEntrada) => peticion<AjustesPropuesta>('/ajustes/propuesta', json(entrada, 'PUT')),
+    subirImagen: (hueco: HuecoMarca, archivo: File) => {
+      const datos = new FormData()
+      datos.append('archivo', archivo)
+      return peticion<AjustesPropuesta>(`/ajustes/propuesta/imagenes/${hueco}`, { method: 'POST', body: datos })
+    },
+    quitarImagen: (hueco: HuecoMarca) => peticion<AjustesPropuesta>(`/ajustes/propuesta/imagenes/${hueco}`, { method: 'DELETE' }),
   },
   compuestos: {
     crear: (cotizacionId: string, cuerpo: { item_ids: string[]; nombre?: string; imagen_id?: string | null; precio?: PrecioCompuesto }) =>

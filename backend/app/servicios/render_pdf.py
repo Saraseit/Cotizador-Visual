@@ -20,12 +20,13 @@ from fastapi import HTTPException, status
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from app.db.modelos import (
+    AjustesPropuesta,
     ConfigPresentacion,
     CotizacionDetalle,
     CotizacionItem,
     descripcion_impresa,
 )
-from app.servicios import idiomas
+from app.servicios import ajustes_propuesta, idiomas
 from app.servicios.compuestos import Renglon, categoria_efectiva, renglones
 
 DIR_PLANTILLAS = Path(__file__).resolve().parent.parent / "plantillas"
@@ -102,14 +103,21 @@ def agrupar_en_secciones(items: list[ItemRender], categorias: list[str]) -> list
 
 
 def construir_contexto(
-    detalle: CotizacionDetalle, data_uris: dict[str, str], config: ConfigPresentacion | None = None
+    detalle: CotizacionDetalle,
+    data_uris: dict[str, str],
+    config: ConfigPresentacion | None = None,
+    ajustes: AjustesPropuesta | None = None,
+    marca: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """`data_uris` va indexado por id de imagen (str).
 
     Las partidas de flete y montaje no se imprimen como renglón: se suman en el bloque de totales.
     `config` es la de la presentación de esta cotización: de ahí salen la moneda y el idioma, para que
-    los dos PDF del cliente salgan iguales.
+    los dos PDF del cliente salgan iguales. `ajustes` es el "Formato del PDF" (título, notas, campos
+    extra) y `marca`, sus imágenes como data URI ('logotipo', 'pie'); sin ellos, los de por defecto.
     """
+    ajustes = ajustes or AjustesPropuesta()
+    marca = marca if marca is not None else {"logotipo": ajustes_propuesta.logotipo_de_marca()}
     dinero = idiomas.Dinero(config.moneda, config.tipo_cambio) if config else idiomas.Dinero()
     traducir = idiomas.Traductor(config.idioma, dict(config.traducciones)) if config else idiomas.Traductor()
     t = idiomas.etiquetas_de(config.idioma if config else "es")
@@ -165,9 +173,17 @@ def construir_contexto(
         totales.append((t["iva"], dinero(detalle.iva)))
     ahora = datetime.now()
     fecha = ahora.strftime("%d/%m/%Y") if not config or config.idioma == "es" else ahora.strftime("%m/%d/%Y")
+    idioma = config.idioma if config else "es"
     return {
         "t": t,
-        "idioma": config.idioma if config else "es",
+        "idioma": idioma,
+        "titulo": ajustes.titulo.strip() or t["propuesta_de_mobiliario"],
+        "subtitulo": ajustes.subtitulo.strip() or t["lema_marca"],
+        "logotipo": marca.get("logotipo"),
+        "imagen_pie": marca.get("pie"),
+        "campos": ajustes_propuesta.campos_impresos(ajustes, detalle.campos, idioma),
+        "notas_titulo": ajustes.notas_titulo.strip(),
+        "notas": [r.rstrip() for r in ajustes.notas.strip().splitlines()] if ajustes.notas.strip() else [],
         "nota_moneda": _nota_moneda(config, t, fecha),
         "nombre_cliente": detalle.nombre_cliente,
         "referencia_externa": detalle.referencia_externa,
@@ -223,7 +239,7 @@ def html_a_pdf(html: str) -> bytes:
 
 
 async def generar_pdf_cotizacion(
-    detalle: CotizacionDetalle, storage: Any, config: ConfigPresentacion | None = None
+    detalle: CotizacionDetalle, storage: Any, config: ConfigPresentacion | None = None, ajustes: AjustesPropuesta | None = None
 ) -> bytes:
     imagenes = {str(i.imagen.id): i.imagen.ruta_storage for i in detalle.items if i.imagen and not i.cargo}
     imagenes |= {str(c.imagen.id): c.imagen.ruta_storage for c in detalle.compuestos if c.imagen}
@@ -238,5 +254,7 @@ async def generar_pdf_cotizacion(
     resultados = await asyncio.gather(*(descargar(i, r) for i, r in imagenes.items()))
     data_uris = {imagen_id: uri for imagen_id, uri in resultados if uri}
 
-    html = renderizar_html(construir_contexto(detalle, data_uris, config))
+    ajustes = ajustes or AjustesPropuesta()
+    marca = await ajustes_propuesta.imagenes(storage, ajustes)
+    html = renderizar_html(construir_contexto(detalle, data_uris, config, ajustes, marca))
     return await asyncio.to_thread(html_a_pdf, html)

@@ -1,4 +1,4 @@
-import { Activity, Check, FileText, Library, LogOut, Package, Users } from 'lucide-react'
+import { Activity, Check, FileCog, FileText, Library, LogOut, Package, Users } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 
@@ -46,10 +46,12 @@ function IndicadorProgreso({ actual }: { actual: number }) {
   )
 }
 
-function Enlace({ a, icono, children }: { a: string; icono: ReactNode; children: ReactNode }) {
+/** `compacto`: sólo el icono hasta pantallas muy anchas (la barra ya va llena). */
+function Enlace({ a, icono, children, compacto = false }: { a: string; icono: ReactNode; children: ReactNode; compacto?: boolean }) {
   return (
     <NavLink
       to={a}
+      title={typeof children === 'string' ? children : undefined}
       className={({ isActive }) =>
         `flex min-h-boton items-center gap-2 rounded-boton px-3 text-sm ${
           isActive ? 'bg-fondo text-texto' : 'text-texto-secundario hover:bg-fondo hover:text-texto'
@@ -57,7 +59,7 @@ function Enlace({ a, icono, children }: { a: string; icono: ReactNode; children:
       }
     >
       {icono}
-      <span className="hidden sm:inline">{children}</span>
+      <span className={compacto ? 'hidden 2xl:inline' : 'hidden sm:inline'}>{children}</span>
     </NavLink>
   )
 }
@@ -92,6 +94,9 @@ export function Disposicion() {
                 </Enlace>
                 <Enlace a="/estado" icono={<Activity className="h-4 w-4" />}>
                   Estado
+                </Enlace>
+                <Enlace a="/formato-pdf" icono={<FileCog className="h-4 w-4" />} compacto>
+                  Formato del PDF
                 </Enlace>
               </>
             )}

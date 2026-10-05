@@ -262,6 +262,8 @@ class CotizacionResumen(BaseModel):
     items_pendientes: int = 0
     # Total de la propuesta contra el del PDF del sistema (también en la lista de Propuestas).
     cuadre: Cuadre = Field(default_factory=Cuadre)
+    # Valores de los campos extra del PDF (id del campo -> texto). Ver `AjustesPropuesta`.
+    campos: dict[str, str] = Field(default_factory=dict)
 
 
 class CotizacionDetalle(CotizacionResumen):
@@ -585,3 +587,67 @@ def calcular_estado_item(imagen: dict[str, Any] | Imagen | None) -> EstadoItem:
     if tipo == "generada":
         return "render_conceptual"
     return "variante"
+
+
+# ---------------------------------------------------------------------------
+# Formato del PDF de la propuesta base
+# ---------------------------------------------------------------------------
+
+TipoCampo = Literal["texto", "fecha", "hora"]
+HuecoMarca = Literal["logotipo", "pie"]
+
+NOTAS_POR_DEFECTO = """IMPORTANTE DE LEER
+1.- Le sugerimos confirmar su pedido para asegurar la disponibilidad del mobiliario
+2.- Los pedidos requieren un 50% de anticipo al confirmar y el resto 2 días antes del evento.
+3.- Sugerimos hacer los cambios necesarios a su pedido 3 días antes del evento.
+4.- Este presupuesto esta sujeto a cambios sin previo aviso.
+5.- Los anticipos no son reembolsables.
+6.- Todos los precios son mas IVA."""
+
+
+class CampoPropuesta(BaseModel):
+    """Campo extra del encabezado (p. ej. "Fecha del evento"). El valor se llena en cada cotización;
+    `predeterminado` se usa si la cotización no trae uno. Fechas AAAA-MM-DD, horas HH:MM."""
+
+    id: str = Field(min_length=1, max_length=40, pattern=r"^[A-Za-z0-9_-]+$")
+    etiqueta: str = Field(min_length=1, max_length=40)
+    tipo: TipoCampo = "texto"
+    predeterminado: str = Field("", max_length=200)
+
+
+class AjustesPropuestaEntrada(BaseModel):
+    """Lo que se edita en "Formato del PDF". Título o subtítulo vacíos = los de siempre (y se traducen)."""
+
+    titulo: str = Field("", max_length=80)
+    subtitulo: str = Field("", max_length=120)
+    notas_titulo: str = Field("Notas", max_length=60)
+    notas: str = Field(NOTAS_POR_DEFECTO, max_length=4000)
+    campos: list[CampoPropuesta] = Field(default_factory=list, max_length=12)
+
+    @model_validator(mode="after")
+    def _ids_unicos(self) -> "AjustesPropuestaEntrada":
+        ids = [c.id for c in self.campos]
+        if len(ids) != len(set(ids)):
+            raise ValueError("Hay campos repetidos.")
+        return self
+
+
+class AjustesPropuesta(AjustesPropuestaEntrada):
+    """Lo que se guarda en `ajustes` (clave 'propuesta_base'): la entrada más las imágenes subidas.
+    Sin logotipo subido se usa el de la marca (`app/marca/logotipo.png`)."""
+
+    logotipo_ruta: str | None = None
+    pie_ruta: str | None = None
+
+
+class AjustesPropuestaVista(AjustesPropuesta):
+    logotipo_url: str | None = None
+    pie_url: str | None = None
+    # True cuando el logotipo es el de la marca (no se ha subido otro).
+    logotipo_de_marca: bool = True
+
+
+class GuardarCampos(BaseModel):
+    """Valores de los campos extra de una cotización. Vacío = se usa el predeterminado."""
+
+    valores: dict[str, str] = Field(default_factory=dict, max_length=12)
