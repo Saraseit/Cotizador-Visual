@@ -211,7 +211,7 @@ def test_partida_mal_leida_no_cuadra_aunque_no_haya_compuestos():
     # El PDF dice SubTotal 10,500 pero las partidas leídas (mobiliario y flete) suman 10,000.
     totales = compuestos.totales(detalle.items, detalle.compuestos, None)
     cuadre = compuestos.cuadre(detalle.items, detalle.compuestos, totales["total"], 10_500, None)
-    assert not cuadre.cuadra and cuadre.diferencia == -500 and cuadre.ajustes == []
+    assert not cuadre.cuadra and cuadre.diferencia == -580 and cuadre.ajustes == []  # 500 + 16 % de IVA
 
 
 def test_sin_subtotal_del_documento_se_compara_con_las_partidas():

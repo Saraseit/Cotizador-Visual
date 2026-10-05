@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from './cliente'
 import type {
+  EditarPartida,
+  NuevaPartida,
   AjustesPropuesta,
   AjustesPropuestaEntrada,
   HuecoMarca,
@@ -37,6 +39,7 @@ export const llaves = {
   resumenBiblioteca: ['biblioteca', 'resumen'] as const,
   usuarios: ['usuarios'] as const,
   ajustesPropuesta: ['ajustes', 'propuesta'] as const,
+  historial: (id: string) => ['cotizaciones', id, 'cambios'] as const,
 }
 
 // --- Salud ------------------------------------------------------------------
@@ -162,6 +165,58 @@ export function useGuardarCampos(cotizacionId: string) {
     mutationKey: llaveEdicion(cotizacionId),
     mutationFn: (valores: Record<string, string>) => api.cotizaciones.guardarCampos(cotizacionId, valores),
     onSettled: (detalle) => alTerminar(detalle),
+  })
+}
+
+// --- Edición de la cotización (cambios contra el sistema principal) ---------
+
+/** Todas devuelven la cotización; además cambian la lista (alineación) y el historial. */
+function useMutacionEdicion<T>(cotizacionId: string, fn: (valor: T) => Promise<CotizacionDetalle>) {
+  const cliente = useQueryClient()
+  const alTerminar = useAlTerminarEdicion(cotizacionId)
+  return useMutation({
+    mutationKey: llaveEdicion(cotizacionId),
+    mutationFn: fn,
+    onSettled: (detalle) => alTerminar(detalle),
+    onSuccess: () => {
+      void cliente.invalidateQueries({ queryKey: llaves.cotizaciones, exact: true })
+      void cliente.invalidateQueries({ queryKey: llaves.historial(cotizacionId) })
+      void cliente.invalidateQueries({ queryKey: llaves.presentacion(cotizacionId) })
+    },
+  })
+}
+
+export function useAgregarPartida(cotizacionId: string) {
+  return useMutacionEdicion(cotizacionId, (partida: NuevaPartida) => api.edicion.agregar(cotizacionId, partida))
+}
+
+export function useEditarPartida(cotizacionId: string) {
+  return useMutacionEdicion(cotizacionId, ({ itemId, cambios }: { itemId: string; cambios: EditarPartida }) =>
+    api.edicion.editar(cotizacionId, itemId, cambios),
+  )
+}
+
+export function useQuitarPartida(cotizacionId: string) {
+  return useMutacionEdicion(cotizacionId, (itemId: string) => api.edicion.quitar(cotizacionId, itemId))
+}
+
+export function useRestaurarPartida(cotizacionId: string) {
+  return useMutacionEdicion(cotizacionId, (itemId: string) => api.edicion.restaurar(cotizacionId, itemId))
+}
+
+export function useRenombrarSeccion(cotizacionId: string) {
+  return useMutacionEdicion(cotizacionId, ({ de, a }: { de: string; a: string }) => api.edicion.renombrarSeccion(cotizacionId, de, a))
+}
+
+export function useAlinear(cotizacionId: string) {
+  return useMutacionEdicion(cotizacionId, () => api.edicion.alinear(cotizacionId))
+}
+
+export function useHistorial(cotizacionId: string, habilitado = true) {
+  return useQuery({
+    queryKey: llaves.historial(cotizacionId),
+    queryFn: () => api.edicion.historial(cotizacionId),
+    enabled: Boolean(cotizacionId) && habilitado,
   })
 }
 

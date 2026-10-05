@@ -251,6 +251,14 @@ export function Propuestas() {
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
+                  {!cotizacion.alineada && (
+                    <span
+                      className="rounded-pildora border border-alerta-borde bg-alerta-fondo px-2.5 py-0.5 text-xs font-semibold text-alerta-texto"
+                      title="Tiene cambios hechos en ProVista que todavía no se aplican en el sistema principal."
+                    >
+                      No alineada al sistema
+                    </span>
+                  )}
                   {!cotizacion.cuadre.cuadra && (
                     <span
                       className="rounded-pildora border border-alerta-borde bg-alerta-fondo px-2.5 py-0.5 text-xs font-semibold text-alerta-texto"

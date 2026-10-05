@@ -26,6 +26,12 @@ export function AvisoCuadre({ cuadre, className = '' }: { cuadre: Cuadre; classN
         <span className="tabular-nums">{moneda(cuadre.total_propuesta)}</span> · Diferencia:{' '}
         <span className="font-semibold tabular-nums">{conSigno(cuadre.diferencia)}</span>
       </p>
+      {Math.abs(cuadre.diferencia_ediciones) >= TOLERANCIA && (
+        <p className="mt-1">
+          De esa diferencia, {conSigno(cuadre.diferencia_ediciones)} vienen de cambios hechos en ProVista (ver el aviso de alineación); el
+          resto, {conSigno(cuadre.diferencia - cuadre.diferencia_ediciones)}, se explica abajo.
+        </p>
+      )}
       <ul className="mt-2 list-disc space-y-1 pl-5">
         {cuadre.ajustes.map((ajuste) => (
           <li key={ajuste.compuesto_id}>

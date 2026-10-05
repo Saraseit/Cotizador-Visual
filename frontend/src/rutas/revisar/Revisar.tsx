@@ -1,11 +1,12 @@
 import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table'
-import { ArrowRight, Combine, ImagePlus, Layers, RefreshCw } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { ArrowRight, Combine, ImagePlus, Layers, Pencil, Plus, RefreshCw, X } from 'lucide-react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 
 import { useAjustesPropuesta, useAsignarCargo, useCotizacion, usePresentacion, useReordenar } from '@/api/consultas'
 import type { Cargo, Compuesto, CotizacionItem } from '@/api/tipos'
 import { Aviso, mensajeDeError } from '@/componentes/Aviso'
+import { AvisoAlineacion } from '@/componentes/AvisoAlineacion'
 import { AvisoCuadre } from '@/componentes/AvisoCuadre'
 import { Boton } from '@/componentes/Boton'
 import { Miniatura } from '@/componentes/Miniatura'
@@ -16,12 +17,39 @@ import { CombinarArticulos, EditorCompuesto, type PestanaCompuesto } from './Art
 import { CamposPropuesta } from './CamposPropuesta'
 import { DescripcionEditable } from './DescripcionEditable'
 import { FormatoPropuesta } from './FormatoPropuesta'
+import { Historial } from './Historial'
+import { AgregarPartida, EditarPartida } from './Partidas'
+import { ModalSeccion, nombreSeccion } from './Secciones'
 import { SelectorImagen } from './SelectorImagen'
 import { TablaOrdenable } from './TablaOrdenable'
 
 type Filtro = 'pendientes' | 'todos'
 
 const columna = createColumnHelper<CotizacionItem>()
+
+/** Cantidad o precio de una partida: se edita con un clic. Si difiere del sistema, abajo dice cuánto era. */
+function CeldaEditable({ valor, sistema, alEditar }: { valor: string; sistema: string | null; alEditar: () => void }) {
+  return (
+    <button type="button" onClick={alEditar} title="Editar cantidad, precio o sección" className="group block w-full text-right tabular-nums hover:text-acento">
+      <span className="border-b border-dotted border-texto-secundario/50 group-hover:border-acento">{valor}</span>
+      {sistema !== null && <span className="block text-xs text-alerta-texto">sistema: {sistema}</span>}
+    </button>
+  )
+}
+
+function BotonIcono({ etiqueta, onClick, children }: { etiqueta: string; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={etiqueta}
+      title={etiqueta}
+      className="flex h-7 w-7 items-center justify-center rounded-boton text-texto-secundario hover:bg-superficie hover:text-texto"
+    >
+      {children}
+    </button>
+  )
+}
 
 /** La fila de un compuesto en la tabla lleva este prefijo en su id: no es una partida real. */
 const PREFIJO_COMPUESTO = 'compuesto:'
@@ -79,6 +107,10 @@ export function Revisar() {
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set())
   const [combinando, setCombinando] = useState(false)
   const [compuestoAbierto, setCompuestoAbierto] = useState<{ id: string; pestana: PestanaCompuesto } | null>(null)
+  // Edición contra el sistema principal: agregar, editar o quitar partidas y secciones.
+  const [agregando, setAgregando] = useState(false)
+  const [partidaEditando, setPartidaEditando] = useState<CotizacionItem | null>(null)
+  const [seccionAbierta, setSeccionAbierta] = useState<{ titulo: string; modo: 'renombrar' | 'quitar' } | null>(null)
   const presentacion = usePresentacion(id)
   const ajustesPdf = useAjustesPropuesta()
   const reordenar = useReordenar(id ?? '')
@@ -117,6 +149,14 @@ export function Revisar() {
     return filtro === 'pendientes' ? unidades.filter((i) => i.estado === 'falta_imagen') : unidades
   }, [cotizacion, filtro])
   const cargos = useMemo(() => (cotizacion?.items ?? []).filter((i) => i.cargo), [cotizacion])
+  // Secciones de la cotización en el orden de impresión (las del sistema y las que se crearon aquí).
+  const secciones = useMemo(() => {
+    const vistas: string[] = []
+    for (const item of [...(cotizacion?.items ?? [])].sort((a, b) => a.orden - b.orden)) {
+      if (!item.cargo && !vistas.includes(item.categoria)) vistas.push(item.categoria)
+    }
+    return vistas
+  }, [cotizacion])
 
   /** Al reordenar, la fila del compuesto se expande a sus partidas (que quedan juntas). */
   const alReordenar = (ids: string[]) =>
@@ -183,6 +223,11 @@ export function Revisar() {
                 <span className="font-medium">{getValue() || '—'}</span>
               )}
               {row.original.tipo_item === 'ad_hoc' && !compuesto && <p className="text-xs text-texto-secundario">Fuera de catálogo</p>}
+              {row.original.origen === 'provista' && !compuesto && (
+                <p className="text-xs font-medium text-alerta-texto" title="No está en el sistema principal">
+                  Agregada aquí
+                </p>
+              )}
             </div>
           )
         },
@@ -210,7 +255,17 @@ export function Revisar() {
         header: () => <span className="block text-right">Cantidad</span>,
         cell: ({ getValue, row }) => {
           const compuesto = compuestoDe(row.original)
-          const valor = compuesto ? compuesto.cantidad : getValue()
+          if (!compuesto) {
+            const sistema = row.original.cantidad_sistema
+            return (
+              <CeldaEditable
+                valor={cantidad(getValue())}
+                sistema={row.original.origen === 'sistema' && sistema !== null && sistema !== getValue() ? cantidad(sistema) : null}
+                alEditar={() => setPartidaEditando(row.original)}
+              />
+            )
+          }
+          const valor = compuesto.cantidad
           return <span className="block text-right tabular-nums">{valor === null ? '—' : cantidad(valor)}</span>
         },
       }),
@@ -218,7 +273,16 @@ export function Revisar() {
         header: () => <span className="block text-right">Precio</span>,
         cell: ({ getValue, row }) => {
           const compuesto = compuestoDe(row.original)
-          if (!compuesto) return <span className="block text-right tabular-nums">{dinero(getValue())}</span>
+          if (!compuesto) {
+            const sistema = row.original.precio_sistema
+            return (
+              <CeldaEditable
+                valor={dinero(getValue())}
+                sistema={row.original.origen === 'sistema' && sistema !== null && Math.abs(sistema - getValue()) >= 0.005 ? dinero(sistema) : null}
+                alEditar={() => setPartidaEditando(row.original)}
+              />
+            )
+          }
           const cambiado = Math.abs(compuesto.importe - compuesto.importe_partidas) >= 0.005
           return (
             <span className="block text-right tabular-nums">
@@ -278,7 +342,7 @@ export function Revisar() {
     },
     // `dinero` y `traducciones` dependen de la moneda y el idioma elegidos.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [mutarCargo, cambiandoCargo, id, config?.moneda, config?.tipo_cambio, config?.idioma, traducciones, seleccion, compuestos],
+    [mutarCargo, cambiandoCargo, id, config?.moneda, config?.tipo_cambio, config?.idioma, traducciones, seleccion, compuestos, cotizacion],
   )
 
   const tabla = useReactTable({
@@ -332,7 +396,8 @@ export function Revisar() {
     ['Subtotal', cotizacion.subtotal],
     ...(cotizacion.flete !== 0 ? ([['Flete', cotizacion.flete]] as [string, number][]) : []),
     ...(cotizacion.montaje !== 0 ? ([['Montaje', cotizacion.montaje]] as [string, number][]) : []),
-    ...(cotizacion.iva !== null ? ([['IVA', cotizacion.iva]] as [string, number][]) : []),
+    // El IVA siempre aparece: el del PDF del sistema o, si sólo decía "más IVA", calculado.
+    [cotizacion.iva_calculado ? `IVA (${Math.round(cotizacion.tasa_iva * 100)}%)` : 'IVA', cotizacion.iva ?? 0],
   ]
 
   return (
@@ -342,8 +407,7 @@ export function Revisar() {
           <p className="text-sm text-texto-secundario">Paso 2 · Revisar imágenes</p>
           <h1 className="mt-1 text-3xl">{cotizacion.nombre_cliente}</h1>
           <p className="mt-1 text-texto-secundario">
-            Referencia {cotizacion.referencia_externa || 'sin referencia'} · {total} ítems · total {dinero(cotizacion.total)}
-            {cotizacion.iva === null && ' más IVA'}
+            Referencia {cotizacion.referencia_externa || 'sin referencia'} · {total} ítems · total {dinero(cotizacion.total)} con IVA
           </p>
         </div>
         <div className="w-full max-w-xs">
@@ -365,6 +429,7 @@ export function Revisar() {
         </div>
       </header>
 
+      <AvisoAlineacion cotizacionId={cotizacion.id} alineacion={cotizacion.alineacion} className="mt-6" />
       <AvisoCuadre cuadre={cotizacion.cuadre} className="mt-6" />
 
       {fotosImportadas > 0 && (
@@ -396,6 +461,9 @@ export function Revisar() {
             {texto}
           </button>
         ))}
+        <Boton variante="secundario" className="ml-auto" icono={<Plus className="h-4 w-4" />} onClick={() => setAgregando(true)}>
+          Agregar partida
+        </Boton>
       </div>
 
       {ordenando && filas.length > 1 && (
@@ -421,6 +489,18 @@ export function Revisar() {
             columnas={columnasVisibles}
             encabezado={encabezado}
             alReordenar={alReordenar}
+            accionesSeccion={(titulo) => (
+              <>
+                <BotonIcono etiqueta={`Renombrar la sección ${nombreSeccion(titulo)}`} onClick={() => setSeccionAbierta({ titulo, modo: 'renombrar' })}>
+                  <Pencil className="h-3.5 w-3.5" />
+                </BotonIcono>
+                {secciones.length > 1 && (
+                  <BotonIcono etiqueta={`Quitar la sección ${nombreSeccion(titulo)}`} onClick={() => setSeccionAbierta({ titulo, modo: 'quitar' })}>
+                    <X className="h-3.5 w-3.5" />
+                  </BotonIcono>
+                )}
+              </>
+            )}
           />
         ) : (
           <table className="w-full text-sm">
@@ -458,33 +538,36 @@ export function Revisar() {
 
       {filtro === 'todos' && (
         <div className="mt-6 grid gap-6 md:grid-cols-[1fr_20rem]">
-          <section className="tarjeta p-5" aria-labelledby="titulo-cargos">
-            <h2 id="titulo-cargos" className="text-base font-semibold">
-              Flete y montaje
-            </h2>
-            <p className="mt-1 text-sm text-texto-secundario">
-              No se imprimen como partida: se suman en los totales. Se detectan por la descripción. Si alguno está mal, cámbialo aquí o en
-              la columna Tipo.
-            </p>
-            {cargos.length === 0 ? (
-              <p className="mt-4 text-sm text-texto-secundario">Esta cotización no trae flete ni montaje.</p>
-            ) : (
-              <ul className="mt-4 divide-y divide-borde">
-                {cargos.map((item) => (
-                  <li key={item.id} className="flex flex-wrap items-center gap-3 py-3 text-sm">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate" title={item.descripcion_origen}>
-                        {item.descripcion_origen}
-                      </p>
-                      {item.codigo_origen && <p className="text-xs text-texto-secundario">{item.codigo_origen}</p>}
-                    </div>
-                    <span className="tabular-nums">{dinero(item.importe)}</span>
-                    <SelectorTipo item={item} ocupado={cambiandoCargo} alCambiar={(cargo) => mutarCargo({ itemId: item.id, cargo })} />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+          <div className="space-y-6 self-start">
+            <section className="tarjeta p-5" aria-labelledby="titulo-cargos">
+              <h2 id="titulo-cargos" className="text-base font-semibold">
+                Flete y montaje
+              </h2>
+              <p className="mt-1 text-sm text-texto-secundario">
+                No se imprimen como partida: se suman en los totales. Se detectan por la descripción. Si alguno está mal, cámbialo aquí o en
+                la columna Tipo.
+              </p>
+              {cargos.length === 0 ? (
+                <p className="mt-4 text-sm text-texto-secundario">Esta cotización no trae flete ni montaje.</p>
+              ) : (
+                <ul className="mt-4 divide-y divide-borde">
+                  {cargos.map((item) => (
+                    <li key={item.id} className="flex flex-wrap items-center gap-3 py-3 text-sm">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate" title={item.descripcion_origen}>
+                          {item.descripcion_origen}
+                        </p>
+                        {item.codigo_origen && <p className="text-xs text-texto-secundario">{item.codigo_origen}</p>}
+                      </div>
+                      <span className="tabular-nums">{dinero(item.importe)}</span>
+                      <SelectorTipo item={item} ocupado={cambiandoCargo} alCambiar={(cargo) => mutarCargo({ itemId: item.id, cargo })} />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+            <Historial cotizacionId={cotizacion.id} />
+          </div>
 
           <div className="space-y-6">
             {(ajustesPdf.data?.campos.length ?? 0) > 0 && (
@@ -507,10 +590,7 @@ export function Revisar() {
                   </div>
                 ))}
                 <div className="flex justify-between gap-4 border-t border-borde pt-2 text-base font-semibold">
-                  <dt>
-                    Total
-                    {cotizacion.iva === null && <span className="font-normal text-texto-secundario"> (más IVA)</span>}
-                  </dt>
+                  <dt>Total</dt>
                   <dd className="tabular-nums">{dinero(cotizacion.total)}</dd>
                 </div>
               </dl>
@@ -575,6 +655,36 @@ export function Revisar() {
           dinero={dinero}
           pestanaInicial={compuestoAbierto.pestana}
           alCerrar={() => setCompuestoAbierto(null)}
+        />
+      )}
+
+      {agregando && (
+        <AgregarPartida
+          cotizacionId={cotizacion.id}
+          secciones={secciones}
+          seccionInicial={secciones[secciones.length - 1] ?? ''}
+          alCerrar={() => setAgregando(false)}
+        />
+      )}
+
+      {partidaEditando && (
+        <EditarPartida
+          key={partidaEditando.id}
+          cotizacionId={cotizacion.id}
+          item={cotizacion.items.find((i) => i.id === partidaEditando.id) ?? partidaEditando}
+          secciones={secciones}
+          alCerrar={() => setPartidaEditando(null)}
+        />
+      )}
+
+      {seccionAbierta && (
+        <ModalSeccion
+          key={`${seccionAbierta.modo}:${seccionAbierta.titulo}`}
+          cotizacionId={cotizacion.id}
+          titulo={seccionAbierta.titulo}
+          secciones={secciones}
+          modo={seccionAbierta.modo}
+          alCerrar={() => setSeccionAbierta(null)}
         />
       )}
 

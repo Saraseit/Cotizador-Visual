@@ -189,6 +189,13 @@ class CotizacionItem(BaseModel):
     descripcion_editada: str = ""
     # Artículo compuesto al que pertenece (sólo presentación: precio y cantidad no cambian).
     compuesto_id: UUID | None = None
+    # 'sistema' = vino en el PDF del sistema; 'provista' = se agregó en Revisar. Los *_sistema son lo que
+    # dice el sistema principal (None = igual que el valor actual); si difieren, se editó aquí.
+    origen: Literal["sistema", "provista"] = "sistema"
+    cantidad_sistema: float | None = None
+    precio_sistema: float | None = None
+    categoria_sistema: str | None = None
+    eliminada: bool = False
     # Campos calculados
     imagen: Imagen | None = None
     item: CatalogoItem | None = None
@@ -237,7 +244,11 @@ class AjustePrecio(BaseModel):
 
 
 class Cuadre(BaseModel):
-    """Comparación del total de la propuesta con el del PDF del sistema que se subió."""
+    """Comparación del total de la propuesta con el del PDF del sistema que se subió.
+
+    Los cambios hechos en Revisar (partidas agregadas, quitadas o editadas) los avisa la alineación;
+    aquí sólo cuentan los que no se explican por ellos (`diferencia_ediciones`).
+    """
 
     cuadra: bool = True
     total_documento: float = 0
@@ -247,6 +258,32 @@ class Cuadre(BaseModel):
     subtotal_documento: float | None = None
     suma_partidas: float = 0
     ajustes: list[AjustePrecio] = Field(default_factory=list)
+    # Parte de la diferencia (IVA incluido) que viene de cambios hechos en Revisar.
+    diferencia_ediciones: float = 0
+
+
+TipoCambioSistema = Literal["agregada", "quitada", "cantidad", "precio", "seccion"]
+
+
+class CambioSistema(BaseModel):
+    """Una diferencia entre la cotización en ProVista y el sistema principal."""
+
+    tipo: TipoCambioSistema
+    item_id: UUID
+    codigo: str = ""
+    descripcion: str = ""
+    # Cantidad o precio (número) o sección (texto). En 'agregada' y 'quitada', cantidad × precio en `despues`/`antes`.
+    antes: float | str | None = None
+    despues: float | str | None = None
+
+
+class Alineacion(BaseModel):
+    """¿La cotización sigue igual que en el sistema principal? Si no, qué cambió en ProVista."""
+
+    alineada: bool = True
+    cambios: list[CambioSistema] = Field(default_factory=list)
+    # Subtotal actual menos el del sistema, antes de IVA (sin contar precios de compuestos).
+    diferencia_importe: float = 0
 
 
 class CotizacionResumen(BaseModel):
@@ -264,6 +301,8 @@ class CotizacionResumen(BaseModel):
     cuadre: Cuadre = Field(default_factory=Cuadre)
     # Valores de los campos extra del PDF (id del campo -> texto). Ver `AjustesPropuesta`.
     campos: dict[str, str] = Field(default_factory=dict)
+    # False si hay cambios hechos en ProVista que todavía no se aplican en el sistema principal.
+    alineada: bool = True
 
 
 class CotizacionDetalle(CotizacionResumen):
@@ -277,6 +316,10 @@ class CotizacionDetalle(CotizacionResumen):
     total: float = 0
     # Sólo al crear: cuántas fotos nuevas del PDF se guardaron en la biblioteca.
     fotos_importadas: int = 0
+    alineacion: Alineacion = Field(default_factory=Alineacion)
+    # Tasa con la que se calcula el IVA: la del PDF del sistema o, si no traía IVA, la general.
+    tasa_iva: float = 0.16
+    iva_calculado: bool = False
 
 
 class Reordenar(BaseModel):
@@ -344,6 +387,41 @@ class EditarCompuesto(BaseModel):
 
 class PeticionGenerarCompuesto(BaseModel):
     peticion: str = Field("", max_length=600)
+
+
+class NuevaPartida(BaseModel):
+    """Partida que se agrega en Revisar. Con `item_id` es del catálogo (toma su código e imagen)."""
+
+    item_id: UUID | None = None
+    codigo: str = Field("", max_length=40)
+    descripcion: str = Field(min_length=1, max_length=600)
+    cantidad: float = Field(gt=0, le=1_000_000)
+    precio_unitario: float = Field(ge=0, le=100_000_000)
+    categoria: str = Field("", max_length=120)
+
+
+class EditarPartida(BaseModel):
+    """Sólo se aplica lo que venga."""
+
+    cantidad: float | None = Field(None, gt=0, le=1_000_000)
+    precio_unitario: float | None = Field(None, ge=0, le=100_000_000)
+    categoria: str | None = Field(None, max_length=120)
+
+
+class RenombrarSeccion(BaseModel):
+    """Renombra una sección (todas sus partidas). Si `a` ya existe, se juntan: así se quita una sección."""
+
+    de: str = Field("", max_length=120)
+    a: str = Field("", max_length=120)
+
+
+class CambioHistorial(BaseModel):
+    id: UUID
+    tipo: str
+    descripcion: str
+    datos: dict[str, Any] = Field(default_factory=dict)
+    creado_en: datetime
+    usuario_nombre: str = ""
 
 
 class ResultadoPdf(BaseModel):

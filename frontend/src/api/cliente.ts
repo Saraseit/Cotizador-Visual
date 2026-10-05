@@ -1,6 +1,9 @@
 import { supabase } from '@/lib/supabase'
 
 import type {
+  CambioHistorial,
+  EditarPartida,
+  NuevaPartida,
   AjustesPropuesta,
   AjustesPropuestaEntrada,
   HuecoMarca,
@@ -131,6 +134,20 @@ export const api = {
       return peticion<AjustesPropuesta>(`/ajustes/propuesta/imagenes/${hueco}`, { method: 'POST', body: datos })
     },
     quitarImagen: (hueco: HuecoMarca) => peticion<AjustesPropuesta>(`/ajustes/propuesta/imagenes/${hueco}`, { method: 'DELETE' }),
+  },
+  edicion: {
+    agregar: (cotizacionId: string, partida: NuevaPartida) =>
+      peticion<CotizacionDetalle>(`/cotizaciones/${cotizacionId}/partidas`, json(partida)),
+    editar: (cotizacionId: string, itemId: string, cambios: EditarPartida) =>
+      peticion<CotizacionDetalle>(`/cotizaciones/${cotizacionId}/partidas/${itemId}`, json(cambios, 'PATCH')),
+    quitar: (cotizacionId: string, itemId: string) =>
+      peticion<CotizacionDetalle>(`/cotizaciones/${cotizacionId}/partidas/${itemId}`, { method: 'DELETE' }),
+    restaurar: (cotizacionId: string, itemId: string) =>
+      peticion<CotizacionDetalle>(`/cotizaciones/${cotizacionId}/partidas/${itemId}/restaurar`, { method: 'POST' }),
+    renombrarSeccion: (cotizacionId: string, de: string, a: string) =>
+      peticion<CotizacionDetalle>(`/cotizaciones/${cotizacionId}/secciones`, json({ de, a }, 'PUT')),
+    alinear: (cotizacionId: string) => peticion<CotizacionDetalle>(`/cotizaciones/${cotizacionId}/alinear`, { method: 'POST' }),
+    historial: (cotizacionId: string) => peticion<CambioHistorial[]>(`/cotizaciones/${cotizacionId}/cambios`),
   },
   compuestos: {
     crear: (cotizacionId: string, cuerpo: { item_ids: string[]; nombre?: string; imagen_id?: string | null; precio?: PrecioCompuesto }) =>

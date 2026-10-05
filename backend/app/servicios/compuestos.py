@@ -168,32 +168,36 @@ TOLERANCIA_CUADRE = 0.5  # pesos: redondeos del sistema
 
 
 def totales(
-    items: list[CotizacionItem], compuestos: list[Compuesto], iva_documento: float | None
+    items: list[CotizacionItem],
+    compuestos: list[Compuesto],
+    iva_documento: float | None,
+    base_del_sistema: float | None = None,
 ) -> dict[str, float | int | None]:
     """Subtotal de mobiliario (con el precio presentado de cada compuesto), cargos, IVA y total.
 
-    El IVA se copia del PDF del sistema; si un compuesto cambió de precio, se ajusta en la misma
-    proporción (el sistema lo calcula sobre todo, cargos incluidos).
+    `items` son las partidas vigentes (sin las quitadas en Revisar). El IVA siempre se imprime: a la
+    tasa del PDF del sistema (IVA / subtotal del sistema) o, si el PDF sólo decía "más IVA", a la
+    general. Así un compuesto con otro precio o una partida editada lo ajustan solos.
     """
+    from app.servicios.alineacion import tasa_iva
+
     partidas = [i for i in sorted(items, key=lambda i: i.orden) if not i.cargo]
     filas = renglones(partidas, compuestos)
     subtotal = round(sum(r.importe for r in filas), 2)
     flete = round(sum(i.importe for i in items if i.cargo == "flete"), 2)
     montaje = round(sum(i.importe for i in items if i.cargo == "montaje"), 2)
-    base_documento = sum(i.importe for i in items)
+    base_sistema = sum(i.importe for i in items) if base_del_sistema is None else base_del_sistema
     base = subtotal + flete + montaje
-    iva = None
-    if iva_documento is not None:
-        iva = float(iva_documento)
-        if base_documento and abs(base - base_documento) >= 0.005:
-            iva = iva * base / base_documento
-        iva = round(iva, 2)
+    tasa = tasa_iva(iva_documento, base_sistema)
+    iva = round(base * tasa, 2)
+    if iva_documento is not None and abs(base - base_sistema) < 0.005:
+        iva = round(float(iva_documento), 2)  # sin cambios: el IVA exacto del PDF, sin redondeos nuestros
     return {
         "subtotal": subtotal,
         "flete": flete,
         "montaje": montaje,
         "iva": iva,
-        "total": round(base + (iva or 0), 2),
+        "total": round(base + iva, 2),
         # Un compuesto cuenta como un ítem (sus partidas ya no se ven por separado en Revisar).
         "total_items": len(filas),
         "items_pendientes": sum(1 for r in filas if r.primero.estado == "falta_imagen"),
@@ -206,16 +210,22 @@ def cuadre(
     total_propuesta: float,
     subtotal_documento: float | None,
     iva_documento: float | None,
+    base_del_sistema: float | None = None,
 ) -> Cuadre:
     """¿El total de la propuesta es el del PDF del sistema?
 
-    Se compara contra el SubTotal impreso en el PDF (si se leyó) más su IVA; así se detecta tanto un
-    compuesto con otro precio como una partida que no se haya leído bien. Sin SubTotal (exports
-    viejos o .xlsx) se usa la suma de las partidas leídas.
+    Se compara contra el SubTotal impreso en el PDF (si se leyó) más su IVA (o el calculado, si el PDF
+    no lo traía); así se detecta un compuesto con otro precio o una partida que no se haya leído bien.
+    Sin SubTotal (exports viejos o .xlsx) se usa la suma de las partidas leídas. La parte de la
+    diferencia que viene de cambios hechos en Revisar no cuenta aquí: la avisa la alineación.
     """
-    suma_partidas = round(sum(i.importe for i in items), 2)
+    from app.servicios.alineacion import tasa_iva
+
+    suma_partidas = round(sum(i.importe for i in items) if base_del_sistema is None else base_del_sistema, 2)
     referencia = subtotal_documento if subtotal_documento is not None else suma_partidas
-    total_documento = round(referencia + (iva_documento or 0), 2)
+    tasa = tasa_iva(iva_documento, suma_partidas)
+    iva_referencia = float(iva_documento) if iva_documento is not None else referencia * tasa
+    total_documento = round(referencia + iva_referencia, 2)
     partidas = [i for i in sorted(items, key=lambda i: i.orden) if not i.cargo]
     ajustes = [
         AjustePrecio(
@@ -228,13 +238,15 @@ def cuadre(
         if r.compuesto and r.precio_cambiado
     ]
     diferencia = round(total_propuesta - total_documento, 2)
+    diferencia_ediciones = round((sum(i.importe for i in items) - suma_partidas) * (1 + tasa), 2)
     lectura_ok = subtotal_documento is None or abs(suma_partidas - subtotal_documento) < TOLERANCIA_CUADRE
     return Cuadre(
-        cuadra=abs(diferencia) < TOLERANCIA_CUADRE and lectura_ok,
+        cuadra=abs(diferencia - diferencia_ediciones) < TOLERANCIA_CUADRE and lectura_ok,
         total_documento=total_documento,
         total_propuesta=round(total_propuesta, 2),
         diferencia=diferencia,
         subtotal_documento=subtotal_documento,
         suma_partidas=suma_partidas,
         ajustes=ajustes,
+        diferencia_ediciones=diferencia_ediciones,
     )

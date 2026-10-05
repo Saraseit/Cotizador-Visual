@@ -201,8 +201,7 @@ export function Presentacion() {
         <h1 className="mt-1 text-3xl">{cotizacion.data.nombre_cliente}</h1>
         <p className="mt-1 text-texto-secundario">
           {datos.secciones.length} {datos.secciones.length === 1 ? 'sección' : 'secciones'} · {cotizacion.data.total_items} partidas · total{' '}
-          {moneda(cotizacion.data.total)}
-          {cotizacion.data.iva === null && ' más IVA'}
+          {moneda(cotizacion.data.total)} con IVA
         </p>
       </header>
 

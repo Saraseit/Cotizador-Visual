@@ -67,9 +67,9 @@ def test_totales_con_iva_del_documento():
     assert t["items_pendientes"] == 1  # ni cuentan como "falta imagen"
 
 
-def test_totales_sin_iva_es_mas_iva():
+def test_sin_iva_en_el_documento_se_calcula_al_16():
     t = calcular_totales(_items(), None)
-    assert t["iva"] is None and t["total"] == 4400
+    assert t["iva"] == 704 and t["total"] == 5104  # 4,400 × 16 %
 
 
 def _detalle(items, iva):
@@ -93,11 +93,12 @@ def test_propuesta_agrupa_por_seccion_y_muestra_cargos_abajo():
     assert "$5,104.00" in html and "(más IVA)" not in html
 
 
-def test_propuesta_sin_cargos_ni_iva():
+def test_propuesta_sin_cargos_y_sin_iva_en_el_documento():
     items = [i for i in _items() if not i.cargo]
     contexto = construir_contexto(_detalle(items, None), {})
-    assert contexto["totales"] == [("Subtotal mobiliario", "$3,500.00")]  # sin renglones de Flete/Montaje/IVA
-    assert "(más IVA)" in renderizar_html(contexto)
+    # Sin renglones de Flete ni Montaje; el IVA siempre aparece (calculado si el PDF no lo traía).
+    assert contexto["totales"] == [("Subtotal mobiliario", "$3,500.00"), ("IVA", "$560.00")]
+    assert "(más IVA)" not in renderizar_html(contexto)
 
 
 def test_orden_elegido_manda_sobre_la_seccion():

@@ -85,7 +85,17 @@ function FilaPartida({ fila }: { fila: Row<CotizacionItem> }) {
   )
 }
 
-function EncabezadoSeccion({ seccion, columnas, arrastrable }: { seccion: Seccion; columnas: number; arrastrable: boolean }) {
+function EncabezadoSeccion({
+  seccion,
+  columnas,
+  arrastrable,
+  acciones,
+}: {
+  seccion: Seccion
+  columnas: number
+  arrastrable: boolean
+  acciones?: ReactNode
+}) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
     id: seccion.id,
     disabled: !arrastrable,
@@ -111,6 +121,7 @@ function EncabezadoSeccion({ seccion, columnas, arrastrable }: { seccion: Seccio
         <span className="ml-2 text-xs text-texto-secundario">
           {seccion.filas.length} {seccion.filas.length === 1 ? 'partida' : 'partidas'}
         </span>
+        {acciones && <span className="ml-3 inline-flex items-center gap-1 align-middle">{acciones}</span>}
       </td>
     </tr>
   )
@@ -122,6 +133,8 @@ interface Props {
   encabezado: ReactNode
   /** Recibe los ids de todas las partidas en el nuevo orden. */
   alReordenar: (ids: string[]) => void
+  /** Botones junto al título de cada sección (renombrar, quitar). */
+  accionesSeccion?: (titulo: string) => ReactNode
 }
 
 /**
@@ -129,7 +142,7 @@ interface Props {
  * Se arrastran partidas dentro de su sección y secciones completas (al tomar una sección, todas se
  * pliegan a su título para que se vea claro dónde va a caer).
  */
-export function TablaOrdenable({ filas, columnas, encabezado, alReordenar }: Props) {
+export function TablaOrdenable({ filas, columnas, encabezado, alReordenar, accionesSeccion }: Props) {
   const secciones = useMemo(() => agruparEnSecciones(filas), [filas])
   const [moviendoSeccion, setMoviendoSeccion] = useState(false)
   const conEncabezados = secciones.length > 1 || secciones.some((s) => s.titulo)
@@ -191,7 +204,14 @@ export function TablaOrdenable({ filas, columnas, encabezado, alReordenar }: Pro
         <SortableContext items={secciones.map((s) => s.id)} strategy={verticalListSortingStrategy}>
           {secciones.map((seccion) => (
             <tbody key={seccion.id} className="divide-y divide-borde border-b border-borde">
-              {conEncabezados && <EncabezadoSeccion seccion={seccion} columnas={columnas} arrastrable={secciones.length > 1} />}
+              {(conEncabezados || accionesSeccion) && (
+                <EncabezadoSeccion
+                  seccion={seccion}
+                  columnas={columnas}
+                  arrastrable={secciones.length > 1}
+                  acciones={accionesSeccion?.(seccion.titulo)}
+                />
+              )}
               {!moviendoSeccion && (
                 <SortableContext items={seccion.filas.map((f) => f.original.id)} strategy={verticalListSortingStrategy}>
                   {seccion.filas.map((fila) => (

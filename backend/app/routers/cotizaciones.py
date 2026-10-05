@@ -27,6 +27,7 @@ from app.db.modelos import (
     calcular_estado_item,
 )
 from app.servicios import ajustes_propuesta
+from app.servicios import alineacion as servicio_alineacion
 from app.servicios import compuestos as servicio_compuestos
 from app.servicios import presentacion as servicio_presentacion
 from app.servicios import render_pdf
@@ -48,7 +49,8 @@ Config = Annotated[Configuracion, Depends(obtener_configuracion)]
 
 SELECT_DETALLE = "*, cotizacion_items(*, imagen:imagenes(*), item:catalogo_items(*))"
 SELECT_RESUMEN = (
-    "*, cotizacion_items(id, imagen_id, cargo, compuesto_id, cantidad, precio_unitario, orden, tipo_item),"
+    "*, cotizacion_items(id, imagen_id, cargo, compuesto_id, cantidad, precio_unitario, orden, tipo_item,"
+    " categoria, origen, cantidad_sistema, precio_sistema, categoria_sistema, eliminada),"
     " cotizacion_compuestos!cotizacion_compuestos_cotizacion_id_fkey(id, nombre, imagen_id, precio_modo, precio_item_id, precio_manual)"
 )
 
@@ -70,7 +72,8 @@ async def _fila_cotizacion(db: Any, cotizacion_id: UUID, seleccion: str = SELECT
 
 
 def _resumen_desde_fila(fila: dict[str, Any]) -> CotizacionResumen:
-    items = [i for i in fila.get("cotizacion_items") or [] if not i.get("cargo")]
+    # Las partidas quitadas en Revisar no cuentan (siguen en la tabla para el historial y el cuadre).
+    items = [i for i in fila.get("cotizacion_items") or [] if not i.get("cargo") and not i.get("eliminada")]
     # Las partidas de un compuesto se imprimen con la foto del compuesto.
     imagen_compuesto = {str(c["id"]): c.get("imagen_id") for c in fila.get("cotizacion_compuestos") or []}
     datos = {k: v for k, v in fila.items() if k not in ("cotizacion_items", "cotizacion_compuestos")}
@@ -96,6 +99,7 @@ def _resumen_desde_fila(fila: dict[str, Any]) -> CotizacionResumen:
         total_items=len(unidades),
         items_pendientes=sum(1 for i in unidades if not con_imagen(i)),
         cuadre=_cuadre_de_fila(fila),
+        alineada=servicio_alineacion.esta_alineada(fila.get("cotizacion_items") or []),
     )
 
 
@@ -110,12 +114,12 @@ def _cuadre_de_fila(fila: dict[str, Any]) -> Any:
         for c in fila.get("cotizacion_compuestos") or []
     ]
     ids_compuestos = {str(c.id) for c in compuestos}
-    items = []
+    todas = []
     for crudo in fila.get("cotizacion_items") or []:
         cantidad = float(crudo.get("cantidad") or 0)
         precio = float(crudo.get("precio_unitario") or 0)
         compuesto_id = crudo.get("compuesto_id") if str(crudo.get("compuesto_id")) in ids_compuestos else None
-        items.append(
+        todas.append(
             CotizacionItem(
                 id=crudo["id"],
                 cotizacion_id=cotizacion_id,
@@ -126,15 +130,21 @@ def _cuadre_de_fila(fila: dict[str, Any]) -> Any:
                 cargo=crudo.get("cargo"),
                 compuesto_id=compuesto_id,
                 importe=round(cantidad * precio, 2),
+                origen=crudo.get("origen") or "sistema",
+                cantidad_sistema=crudo.get("cantidad_sistema"),
+                precio_sistema=crudo.get("precio_sistema"),
+                eliminada=bool(crudo.get("eliminada")),
             )
         )
+    items = [i for i in todas if not i.eliminada]
+    base = servicio_alineacion.base_sistema(todas)
     for compuesto in compuestos:
         compuesto.item_ids = [i.id for i in items if i.compuesto_id == compuesto.id]
     activos = [c for c in compuestos if c.item_ids]
     iva_documento = float(fila["iva_documento"]) if fila.get("iva_documento") is not None else None
     subtotal_documento = float(fila["subtotal_documento"]) if fila.get("subtotal_documento") is not None else None
-    total = servicio_compuestos.totales(items, activos, iva_documento)["total"]
-    return servicio_compuestos.cuadre(items, activos, float(total or 0), subtotal_documento, iva_documento)
+    total = servicio_compuestos.totales(items, activos, iva_documento, base)["total"]
+    return servicio_compuestos.cuadre(items, activos, float(total or 0), subtotal_documento, iva_documento, base)
 
 
 async def compuestos_crudos(db: Any, cotizacion_id: UUID | str) -> list[dict[str, Any]]:
@@ -172,7 +182,7 @@ async def _armar_detalle(
         }
         modelos_compuestos[str(crudo["id"])] = Compuesto(**datos, imagen=imagen, estado=calcular_estado_item(imagen))
 
-    items: list[CotizacionItem] = []
+    todas: list[CotizacionItem] = []
     for crudo in crudos:
         datos = dict(crudo)
         imagen = datos.pop("imagen", None)
@@ -182,11 +192,12 @@ async def _armar_detalle(
         cantidad = float(datos.get("cantidad") or 0)
         precio = float(datos.get("precio_unitario") or 0)
         compuesto = modelos_compuestos.get(str(datos.get("compuesto_id")))
-        if compuesto is None:
+        if compuesto is None or datos.get("eliminada"):
             datos["compuesto_id"] = None  # el compuesto ya no existe: la partida va suelta
+            compuesto = None
         else:
             compuesto.item_ids.append(datos["id"])
-        items.append(
+        todas.append(
             CotizacionItem(
                 **datos,
                 imagen=imagen,
@@ -197,6 +208,9 @@ async def _armar_detalle(
             )
         )
 
+    # Las quitadas en Revisar no se ven ni se imprimen; sólo cuentan para la alineación y el cuadre.
+    items = [i for i in todas if not i.eliminada]
+    base = servicio_alineacion.base_sistema(todas)
     activos = [c for c in modelos_compuestos.values() if c.item_ids]
     # Lo que presenta cada compuesto (cantidad, precio e importe según su modo de precio).
     partidas = [i for i in items if not i.cargo]
@@ -209,23 +223,27 @@ async def _armar_detalle(
 
     iva_documento = float(fila["iva_documento"]) if fila.get("iva_documento") is not None else None
     subtotal_documento = float(fila["subtotal_documento"]) if fila.get("subtotal_documento") is not None else None
-    totales = calcular_totales(items, iva_documento, activos)
+    totales = servicio_compuestos.totales(items, activos, iva_documento, base)
+    alineacion = servicio_alineacion.alineacion(todas)
     encabezado = {k: v for k, v in fila.items() if k != "cotizacion_items"}
     return CotizacionDetalle(
         **encabezado,
         items=items,
         compuestos=activos,
         **totales,
-        cuadre=servicio_compuestos.cuadre(items, activos, totales["total"], subtotal_documento, iva_documento),
+        cuadre=servicio_compuestos.cuadre(items, activos, totales["total"], subtotal_documento, iva_documento, base),
+        alineacion=alineacion,
+        alineada=alineacion.alineada,
+        tasa_iva=round(servicio_alineacion.tasa_iva(iva_documento, base), 6),
+        iva_calculado=iva_documento is None,
     )
 
 
 def calcular_totales(items: list[CotizacionItem], iva_documento: Any, compuestos: list[Compuesto] | None = None) -> dict[str, Any]:
     """Subtotal de mobiliario, cargos por tipo, IVA del documento y total.
 
-    El IVA se copia del PDF del sistema (lo calcula sobre todo, cargos incluidos); si el PDF sólo
-    dice "más IVA" queda en None y el total no lo incluye. Un compuesto con otro precio cambia el
-    subtotal y el IVA se ajusta en proporción (ver `servicios/compuestos.totales`).
+    El IVA siempre aparece: a la tasa del PDF del sistema o, si sólo decía "más IVA", a la general
+    (ver `servicios/compuestos.totales`).
     """
     return servicio_compuestos.totales(items, compuestos or [], float(iva_documento) if iva_documento is not None else None)
 
@@ -357,6 +375,10 @@ async def crear_cotizacion(
             "orden": fila.orden,
             "categoria": fila.categoria or "",
             "cargo": clasificar_cargo(fila.descripcion, fila.categoria),
+            # Lo que dice el sistema principal: si después se edita en Revisar, se nota la diferencia.
+            "cantidad_sistema": str(fila.cantidad),
+            "precio_sistema": str(fila.precio_unitario),
+            "categoria_sistema": fila.categoria or "",
         }
         for fila, resultado in zip(export.filas, resultados)
     ]

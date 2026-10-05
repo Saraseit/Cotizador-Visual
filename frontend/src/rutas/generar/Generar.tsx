@@ -5,6 +5,7 @@ import { Link, useParams } from 'react-router-dom'
 import { useCotizacion, useGenerarPropuesta } from '@/api/consultas'
 import type { ResultadoPdf } from '@/api/tipos'
 import { Aviso, mensajeDeError } from '@/componentes/Aviso'
+import { AvisoAlineacion } from '@/componentes/AvisoAlineacion'
 import { AvisoCuadre } from '@/componentes/AvisoCuadre'
 import { Boton } from '@/componentes/Boton'
 import { Pildora } from '@/componentes/Pildora'
@@ -55,6 +56,8 @@ export function Generar() {
         </div>
       </header>
 
+      {/* Avisos, no bloqueos: los PDF se generan igual. */}
+      <AvisoAlineacion cotizacionId={cotizacion.id} alineacion={cotizacion.alineacion} className="mt-6" />
       <AvisoCuadre cuadre={cotizacion.cuadre} className="mt-6" />
 
       <div className="mt-8 grid gap-5 md:grid-cols-2">

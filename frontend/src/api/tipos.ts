@@ -147,6 +147,12 @@ export interface CotizacionItem {
   descripcion_editada: string
   /** Artículo compuesto al que pertenece (sólo presentación). */
   compuesto_id: string | null
+  /** 'sistema' = vino en el PDF del sistema; 'provista' = se agregó en Revisar. */
+  origen: 'sistema' | 'provista'
+  /** Lo que dice el sistema principal (null = igual que el valor actual). */
+  cantidad_sistema: number | null
+  precio_sistema: number | null
+  categoria_sistema: string | null
   imagen: Imagen | null
   item: CatalogoItem | null
   estado: EstadoItem
@@ -208,6 +214,52 @@ export interface Cuadre {
   /** Suma de las partidas leídas del PDF (mobiliario y cargos). */
   suma_partidas: number
   ajustes: AjustePrecio[]
+  /** Parte de la diferencia (IVA incluido) que viene de cambios hechos en Revisar: la avisa la alineación. */
+  diferencia_ediciones: number
+}
+
+export type TipoCambioSistema = 'agregada' | 'quitada' | 'cantidad' | 'precio' | 'seccion'
+
+/** Una diferencia entre la cotización en ProVista y el sistema principal. */
+export interface CambioSistema {
+  tipo: TipoCambioSistema
+  item_id: string
+  codigo: string
+  descripcion: string
+  /** Cantidad o precio (número) o sección (texto). En 'agregada'/'quitada', el importe. */
+  antes: number | string | null
+  despues: number | string | null
+}
+
+export interface Alineacion {
+  alineada: boolean
+  cambios: CambioSistema[]
+  /** Subtotal actual menos el del sistema, antes de IVA. */
+  diferencia_importe: number
+}
+
+export interface CambioHistorial {
+  id: string
+  tipo: string
+  descripcion: string
+  datos: Record<string, unknown>
+  creado_en: string
+  usuario_nombre: string
+}
+
+export interface NuevaPartida {
+  item_id: string | null
+  codigo: string
+  descripcion: string
+  cantidad: number
+  precio_unitario: number
+  categoria: string
+}
+
+export interface EditarPartida {
+  cantidad?: number
+  precio_unitario?: number
+  categoria?: string
 }
 
 export interface CotizacionResumen {
@@ -223,6 +275,8 @@ export interface CotizacionResumen {
   items_pendientes: number
   /** Total de la propuesta contra el del PDF del sistema (también en la lista de Propuestas). */
   cuadre: Cuadre
+  /** false si hay cambios hechos en ProVista que todavía no se aplican en el sistema principal. */
+  alineada: boolean
   /** Valores de los campos extra del PDF: id del campo -> texto (fechas AAAA-MM-DD, horas HH:MM). */
   campos: Record<string, string>
 }
@@ -233,8 +287,12 @@ export interface CotizacionDetalle extends CotizacionResumen {
   subtotal: number
   flete: number
   montaje: number
-  /** IVA impreso en el PDF del sistema; null si el documento sólo dice "más IVA". */
+  /** Siempre viene: el del PDF del sistema o, si no traía, calculado a `tasa_iva`. */
   iva: number | null
+  tasa_iva: number
+  /** true si el PDF del sistema no traía IVA y se calculó. */
+  iva_calculado: boolean
+  alineacion: Alineacion
   total: number
   /** Sólo en la respuesta de subir: fotos nuevas del PDF guardadas en la biblioteca. */
   fotos_importadas?: number
