@@ -10,6 +10,7 @@ import { Entrar } from '@/rutas/entrar/Entrar'
 import { Estado } from '@/rutas/estado/Estado'
 import { FormatoPdf } from '@/rutas/formato/FormatoPdf'
 import { Generar } from '@/rutas/generar/Generar'
+import { Perfil } from '@/rutas/perfil/Perfil'
 import { Presentacion } from '@/rutas/presentacion/Presentacion'
 import { Propuestas } from '@/rutas/propuestas/Propuestas'
 import { Revisar } from '@/rutas/revisar/Revisar'
@@ -42,6 +43,7 @@ export function App() {
                 <Route path="/cotizaciones/:id/generar" element={<Generar />} />
                 <Route path="/cotizaciones/:id/presentacion" element={<Presentacion />} />
                 <Route path="/propuestas" element={<Propuestas />} />
+                <Route path="/perfil" element={<Perfil />} />
                 <Route path="/catalogo" element={<Catalogo />} />
                 <Route path="/biblioteca" element={<Biblioteca />} />
                 <Route path="/usuarios" element={<Usuarios />} />

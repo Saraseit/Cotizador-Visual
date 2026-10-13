@@ -48,6 +48,25 @@ export interface UsuarioEntrada {
   rol: Rol
 }
 
+export interface CambioContrasena {
+  contrasena_actual: string
+  contrasena_nueva: string
+}
+
+export type TipoEventoCuenta = 'cambio_contrasena' | 'intento_fallido'
+
+/** Aviso para el administrador sobre la cuenta de alguien del equipo. */
+export interface EventoCuenta {
+  id: string
+  usuario_id: string | null
+  tipo: TipoEventoCuenta
+  detalle: string
+  visto: boolean
+  creado_en: string
+  usuario_nombre: string
+  usuario_email: string | null
+}
+
 export interface UsuarioActualizacion {
   nombre?: string
   rol?: Rol

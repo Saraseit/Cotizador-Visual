@@ -56,6 +56,30 @@ class UsuarioActualizacion(BaseModel):
     contrasena: str | None = Field(default=None, min_length=8, max_length=72)
 
 
+class CambioContrasena(BaseModel):
+    """Cuerpo de POST /perfil/contrasena: el usuario cambia la suya confirmando la actual."""
+
+    contrasena_actual: str = Field(min_length=1, max_length=72)
+    contrasena_nueva: str = Field(min_length=8, max_length=72)
+
+
+TipoEventoCuenta = Literal["cambio_contrasena", "intento_fallido"]
+
+
+class EventoCuenta(BaseModel):
+    """Aviso para el administrador: quién cambió su contraseña y cuándo (o quién falló al intentarlo)."""
+
+    id: UUID
+    usuario_id: UUID | None = None
+    tipo: TipoEventoCuenta
+    detalle: str = ""
+    visto: bool = False
+    creado_en: datetime
+    # Calculados, para que el admin no tenga que cruzar ids a mano.
+    usuario_nombre: str = ""
+    usuario_email: str | None = None
+
+
 # ---------------------------------------------------------------------------
 # Imágenes
 # ---------------------------------------------------------------------------

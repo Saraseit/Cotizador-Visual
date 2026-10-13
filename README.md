@@ -184,7 +184,8 @@ python scripts/cargar_catalogo.py --csv fixtures/catalogo_plantilla.csv --imagen
   - *Precios, moneda e idioma*: ocultar precios, presentar en dólares con el tipo de cambio que pongas, y cambiar el idioma a inglés (con el botón *Traducir con IA*).
 - **Catálogo** (`/catalogo`): tabla con foto, medidas, etiquetas, un precio por lista y costo de reposición; formulario completo con sección de imágenes (oficial, variantes, generar con IA); carga por texto; listas de precios.
 - **Biblioteca** (`/biblioteca`): cinco métricas (incluye generaciones en 24 h) e ítems más cotizados sin foto.
-- **Usuarios** (`/usuarios`, admin): alta, rol, contraseña y baja.
+- **Mi cuenta** (`/perfil`): cada quien cambia su propia contraseña confirmando la que tiene. Cada cambio —y cada intento con la actual equivocada— deja un aviso para el administrador; no hay aprobación previa, porque esperarla dejaría a la persona sin entrar.
+- **Usuarios** (`/usuarios`, admin): alta, rol, contraseña y baja, más los **avisos de cuenta** (quién cambió su contraseña y cuándo, con los sin revisar marcados también en el menú).
 - **Tema claro/oscuro**: botón en la barra superior (y en el login) que alterna Automático → Claro → Oscuro. Automático sigue al sistema operativo y reacciona si éste cambia; la elección se recuerda en el navegador. El PDF de la propuesta no cambia: siempre es claro.
 - **Estado** (`/estado`, admin): el diagnóstico de `/api/salud` con círculo verde o rojo por dependencia. Lo primero que hay que abrir tras un deploy.
 
@@ -224,6 +225,7 @@ Prefijo `/api`. Todos requieren `Authorization: Bearer <token de Supabase>` salv
 | POST | `/cotizaciones/{id}/generar` | Renderiza el PDF, lo guarda en `exports`, registra el histórico y devuelve URL firmada |
 | GET | `/cotizaciones/{id}/pdfs` | Historial de PDF generados (base y editorial), más reciente primero; URL para ver y para descargar |
 | GET | `/perfil/yo` | Perfil del usuario autenticado |
+| POST | `/perfil/contrasena` | `{contrasena_actual, contrasena_nueva}`: cambia la propia; 401 si la actual no es correcta |
 | GET/POST | `/catalogo/items` | Búsqueda con precios e imagen oficial / alta por formulario |
 | GET/PATCH | `/catalogo/items/{id}` | Detalle / edición parcial (`precios` reemplaza el conjunto) |
 | POST | `/catalogo/items/carga-texto` | `{texto}` con una línea por ítem; upsert por código sin borrar datos existentes |
@@ -250,6 +252,8 @@ Prefijo `/api`. Todos requieren `Authorization: Bearer <token de Supabase>` salv
 | GET | `/biblioteca/resumen` | Métricas de la biblioteca |
 | GET/POST | `/usuarios` | Admin: lista y alta |
 | PATCH/DELETE | `/usuarios/{id}` | Admin: nombre, rol, contraseña; baja |
+| GET | `/usuarios/eventos` | Admin: avisos de cuenta, más reciente primero |
+| POST | `/usuarios/eventos/vistos` | Admin: marca todos los avisos como revisados |
 
 ## Decisiones tomadas
 

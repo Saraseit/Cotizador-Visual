@@ -1,7 +1,7 @@
-import { AlertTriangle, Info } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Info } from 'lucide-react'
 import type { ReactNode } from 'react'
 
-type Tono = 'error' | 'info' | 'ambar' | 'alerta'
+type Tono = 'error' | 'info' | 'ambar' | 'alerta' | 'exito'
 
 const estilos: Record<Tono, string> = {
   error: 'border-conceptual-texto/30 bg-conceptual-fondo text-conceptual-texto',
@@ -9,12 +9,24 @@ const estilos: Record<Tono, string> = {
   ambar: 'border-pendiente-borde bg-pendiente-fondo text-pendiente-texto',
   // Rojo: algo que puede llegar mal al cliente (p. ej. la propuesta no cuadra con el PDF del sistema).
   alerta: 'border-alerta-borde bg-alerta-fondo text-alerta-texto',
+  exito: 'border-resuelto-texto/30 bg-resuelto-fondo text-resuelto-texto',
+}
+
+const iconos: Record<Tono, typeof Info> = {
+  error: AlertTriangle,
+  info: Info,
+  ambar: AlertTriangle,
+  alerta: AlertTriangle,
+  exito: CheckCircle2,
 }
 
 export function Aviso({ tono = 'info', children, className = '' }: { tono?: Tono; children: ReactNode; className?: string }) {
-  const Icono = tono === 'info' ? Info : AlertTriangle
+  const Icono = iconos[tono]
   return (
-    <div className={`flex items-start gap-2 rounded-boton border px-3 py-2.5 text-sm ${estilos[tono]} ${className}`} role={tono === 'error' || tono === 'alerta' ? 'alert' : undefined}>
+    <div
+      className={`flex items-start gap-2 rounded-boton border px-3 py-2.5 text-sm ${estilos[tono]} ${className}`}
+      role={tono === 'error' || tono === 'alerta' ? 'alert' : undefined}
+    >
       <Icono className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
       <div>{children}</div>
     </div>

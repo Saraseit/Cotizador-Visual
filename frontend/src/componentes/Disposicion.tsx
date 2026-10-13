@@ -1,8 +1,8 @@
-import { Activity, Check, FileCog, FileText, Library, LogOut, Package, Users } from 'lucide-react'
+import { Activity, Check, FileCog, FileText, Library, LogOut, Package, UserRound, Users } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 
-import { usePerfil } from '@/api/consultas'
+import { useEventosCuenta, usePerfil } from '@/api/consultas'
 import { BotonTema } from '@/componentes/BotonTema'
 import { useSesion } from '@/lib/sesion'
 
@@ -47,19 +47,39 @@ function IndicadorProgreso({ actual }: { actual: number }) {
 }
 
 /** `compacto`: sólo el icono hasta pantallas muy anchas (la barra ya va llena). */
-function Enlace({ a, icono, children, compacto = false }: { a: string; icono: ReactNode; children: ReactNode; compacto?: boolean }) {
+function Enlace({
+  a,
+  icono,
+  children,
+  compacto = false,
+  aviso = 0,
+}: {
+  a: string
+  icono: ReactNode
+  children: ReactNode
+  compacto?: boolean
+  aviso?: number
+}) {
   return (
     <NavLink
       to={a}
       title={typeof children === 'string' ? children : undefined}
       className={({ isActive }) =>
-        `flex min-h-boton items-center gap-2 rounded-boton px-3 text-sm ${
+        `relative flex min-h-boton items-center gap-2 rounded-boton px-3 text-sm ${
           isActive ? 'bg-fondo text-texto' : 'text-texto-secundario hover:bg-fondo hover:text-texto'
         }`
       }
     >
       {icono}
       <span className={compacto ? 'hidden 2xl:inline' : 'hidden sm:inline'}>{children}</span>
+      {aviso > 0 && (
+        <span
+          className="absolute right-1 top-2 flex h-4 min-w-4 items-center justify-center rounded-pildora bg-conceptual-texto px-1 text-[10px] font-semibold text-superficie"
+          title={`${aviso} aviso(s) de cuenta sin revisar`}
+        >
+          {aviso > 9 ? '9+' : aviso}
+        </span>
+      )}
     </NavLink>
   )
 }
@@ -67,6 +87,9 @@ function Enlace({ a, icono, children, compacto = false }: { a: string; icono: Re
 export function Disposicion() {
   const { sesion, salir } = useSesion()
   const perfil = usePerfil()
+  const esAdmin = perfil.data?.rol === 'admin'
+  const eventos = useEventosCuenta(esAdmin)
+  const sinVer = eventos.data?.filter((evento) => !evento.visto).length ?? 0
   const ubicacion = useLocation()
 
   return (
@@ -87,9 +110,9 @@ export function Disposicion() {
             <Enlace a="/biblioteca" icono={<Library className="h-4 w-4" />}>
               Biblioteca
             </Enlace>
-            {perfil.data?.rol === 'admin' && (
+            {esAdmin && (
               <>
-                <Enlace a="/usuarios" icono={<Users className="h-4 w-4" />}>
+                <Enlace a="/usuarios" icono={<Users className="h-4 w-4" />} aviso={sinVer}>
                   Usuarios
                 </Enlace>
                 <Enlace a="/estado" icono={<Activity className="h-4 w-4" />}>
@@ -100,9 +123,18 @@ export function Disposicion() {
                 </Enlace>
               </>
             )}
-            <span className="hidden max-w-[180px] truncate px-2 text-sm text-texto-secundario xl:inline" title={sesion?.user.email ?? ''}>
-              {perfil.data?.nombre || sesion?.user.email}
-            </span>
+            <NavLink
+              to="/perfil"
+              className={({ isActive }) =>
+                `flex min-h-boton max-w-[180px] items-center gap-2 rounded-boton px-3 text-sm ${
+                  isActive ? 'bg-fondo text-texto' : 'text-texto-secundario hover:bg-fondo hover:text-texto'
+                }`
+              }
+              title="Mi cuenta y contraseña"
+            >
+              <UserRound className="h-4 w-4 shrink-0" aria-hidden />
+              <span className="hidden truncate 2xl:inline">{perfil.data?.nombre || sesion?.user.email}</span>
+            </NavLink>
             <BotonTema />
             <button
               type="button"

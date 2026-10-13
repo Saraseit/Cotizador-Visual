@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException, status
 
 from app.auth import Usuario, UsuarioActual
 from app.db.cliente import ClienteDB
-from app.db.modelos import UsuarioActualizacion, UsuarioAdmin, UsuarioEntrada
+from app.db.modelos import EventoCuenta, UsuarioActualizacion, UsuarioAdmin, UsuarioEntrada
 
 router = APIRouter(prefix="/usuarios", tags=["usuarios"])
 
@@ -61,6 +61,44 @@ async def _armar(db: Any, usuarios_auth: list[Any]) -> list[UsuarioAdmin]:
         )
     resultado.sort(key=lambda u: u.creado_en or datetime.min.replace(tzinfo=None), reverse=False)
     return resultado
+
+
+@router.get("/eventos", response_model=list[EventoCuenta])
+async def listar_eventos(usuario: Usuario, db: ClienteDB, limite: int = 50) -> list[EventoCuenta]:
+    """Avisos de cuenta: quién cambió su contraseña y cuándo, lo más reciente primero.
+
+    Es el aviso al administrador del cambio de contraseña que cada quien hace desde su perfil.
+    """
+    _exigir_admin(usuario)
+    respuesta = (
+        await db.table("eventos_cuenta")
+        .select("*")
+        .order("creado_en", desc=True)
+        .limit(max(1, min(limite, 200)))
+        .execute()
+    )
+    filas = respuesta.data or []
+    if not filas:
+        return []
+
+    perfiles = (await db.table("perfiles").select("id, nombre").execute()).data or []
+    nombres = {str(p["id"]): p.get("nombre") or "" for p in perfiles}
+    correos = {str(u.id): u.email for u in await _usuarios_auth(db)}
+    return [
+        EventoCuenta(
+            **fila,
+            usuario_nombre=nombres.get(str(fila.get("usuario_id")), ""),
+            usuario_email=correos.get(str(fila.get("usuario_id"))),
+        )
+        for fila in filas
+    ]
+
+
+@router.post("/eventos/vistos", status_code=status.HTTP_204_NO_CONTENT)
+async def marcar_eventos_vistos(usuario: Usuario, db: ClienteDB) -> None:
+    """Marca como leídos los avisos pendientes, para que el contador vuelva a cero."""
+    _exigir_admin(usuario)
+    await db.table("eventos_cuenta").update({"visto": True}).eq("visto", False).execute()
 
 
 @router.get("", response_model=list[UsuarioAdmin])

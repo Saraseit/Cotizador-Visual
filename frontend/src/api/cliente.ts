@@ -13,7 +13,9 @@ import type {
   CatalogoItemActualizacion,
   FormatoPropuesta,
   CatalogoItemEntrada,
+  CambioContrasena,
   CotizacionDetalle,
+  EventoCuenta,
   CotizacionResumen,
   Imagen,
   ListaPrecios,
@@ -103,6 +105,7 @@ export const api = {
   salud,
   perfil: {
     yo: () => peticion<PerfilYo>('/perfil/yo'),
+    cambiarContrasena: (cuerpo: CambioContrasena) => peticion<void>('/perfil/contrasena', json(cuerpo)),
   },
   cotizaciones: {
     listar: () => peticion<CotizacionResumen[]>('/cotizaciones'),
@@ -241,5 +244,7 @@ export const api = {
     crear: (entrada: UsuarioEntrada) => peticion<UsuarioAdmin>('/usuarios', json(entrada)),
     actualizar: (id: string, cambios: UsuarioActualizacion) => peticion<UsuarioAdmin>(`/usuarios/${id}`, json(cambios, 'PATCH')),
     eliminar: (id: string) => peticion<void>(`/usuarios/${id}`, { method: 'DELETE' }),
+    eventos: () => peticion<EventoCuenta[]>('/usuarios/eventos'),
+    marcarEventosVistos: () => peticion<void>('/usuarios/eventos/vistos', { method: 'POST' }),
   },
 }

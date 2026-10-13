@@ -9,6 +9,7 @@ import type {
   HuecoMarca,
   Cargo,
   CatalogoItemActualizacion,
+  CambioContrasena,
   ConfigPresentacionEntrada,
   CotizacionDetalle,
   FormatoPropuesta,
@@ -40,6 +41,7 @@ export const llaves = {
   usuarios: ['usuarios'] as const,
   ajustesPropuesta: ['ajustes', 'propuesta'] as const,
   historial: (id: string) => ['cotizaciones', id, 'cambios'] as const,
+  eventosCuenta: ['usuarios', 'eventos'] as const,
 }
 
 // --- Salud ------------------------------------------------------------------
@@ -250,11 +252,7 @@ export function useQuitarImagenAjustes() {
 // --- Artículos compuestos ---------------------------------------------------
 
 /** Combinar partidas, cambiar el nombre o la foto del compuesto, o separarlo. Todas devuelven la cotización. */
-function useMutacionCompuesto<T>(
-  cotizacionId: string,
-  fn: (valor: T) => Promise<CotizacionDetalle>,
-  alGuardar?: (valor: T) => void,
-) {
+function useMutacionCompuesto<T>(cotizacionId: string, fn: (valor: T) => Promise<CotizacionDetalle>, alGuardar?: (valor: T) => void) {
   const cliente = useQueryClient()
   const alTerminar = useAlTerminarEdicion(cotizacionId)
   return useMutation({
@@ -270,8 +268,10 @@ function useMutacionCompuesto<T>(
 }
 
 export function useCrearCompuesto(cotizacionId: string) {
-  return useMutacionCompuesto(cotizacionId, (cuerpo: { item_ids: string[]; nombre?: string; imagen_id?: string | null; precio?: PrecioCompuesto }) =>
-    api.compuestos.crear(cotizacionId, cuerpo),
+  return useMutacionCompuesto(
+    cotizacionId,
+    (cuerpo: { item_ids: string[]; nombre?: string; imagen_id?: string | null; precio?: PrecioCompuesto }) =>
+      api.compuestos.crear(cotizacionId, cuerpo),
   )
 }
 
@@ -592,6 +592,28 @@ export function useResumenBiblioteca() {
 
 export function useUsuarios(habilitado = true) {
   return useQuery({ queryKey: llaves.usuarios, queryFn: api.usuarios.listar, enabled: habilitado })
+}
+
+/** Cambio de la propia contraseña. El backend avisa al administrador. */
+export function useCambiarContrasena() {
+  return useMutation({ mutationFn: (cuerpo: CambioContrasena) => api.perfil.cambiarContrasena(cuerpo) })
+}
+
+export function useEventosCuenta(habilitado = true) {
+  return useQuery({
+    queryKey: llaves.eventosCuenta,
+    queryFn: api.usuarios.eventos,
+    enabled: habilitado,
+    staleTime: 60 * 1000,
+  })
+}
+
+export function useMarcarEventosVistos() {
+  const cliente = useQueryClient()
+  return useMutation({
+    mutationFn: api.usuarios.marcarEventosVistos,
+    onSuccess: () => void cliente.invalidateQueries({ queryKey: llaves.eventosCuenta }),
+  })
 }
 
 export function useCrearUsuario() {
