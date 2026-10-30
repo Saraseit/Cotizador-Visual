@@ -176,7 +176,7 @@
     <div class="meta">
       <div><strong>{{ t.cliente }}</strong> {{ nombre_cliente }}</div>
       <div><strong>{{ t.referencia }}</strong> {{ referencia_externa or "—" }}</div>
-      <div><strong>{{ t.fecha }}</strong> {{ fecha }}</div>
+      {% if fecha_evento %}<div><strong>{{ t.fecha_evento }}</strong> {{ fecha_evento }}</div>{% endif %}
       {% for etiqueta, valor in campos %}
       <div class="campo"><strong>{{ etiqueta }}</strong> {{ valor }}</div>
       {% endfor %}

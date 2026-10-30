@@ -20,6 +20,7 @@ from app.db.modelos import (
     CotizacionItem,
     CotizacionResumen,
     EditarDescripcion,
+    FechaEvento,
     GuardarCampos,
     PdfGenerado,
     Reordenar,
@@ -594,4 +595,19 @@ async def guardar_campos(
     except ValueError as error:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(error)) from error
     await db.table("cotizaciones").update({"campos": valores}).eq("id", str(cotizacion_id)).execute()
+    return await cargar_detalle(db, storage, cotizacion_id)
+
+
+@router.put("/{cotizacion_id}/fecha-evento", response_model=CotizacionDetalle)
+async def guardar_fecha_evento(
+    cotizacion_id: UUID, cuerpo: FechaEvento, usuario: Usuario, db: ClienteDB, storage: StorageDep
+) -> CotizacionDetalle:
+    """Cuándo es el evento. Es la fecha que se imprime en el encabezado de la propuesta.
+
+    El export del sistema no la trae, así que se captura aquí. Sin fecha la propuesta se genera
+    igual (Revisar avisa), pero sale sin fecha en el encabezado.
+    """
+    cotizacion = await _fila_cotizacion(db, cotizacion_id, "*")
+    _puede_editar(cotizacion, usuario)
+    await db.table("cotizaciones").update(cuerpo.model_dump(mode="json")).eq("id", str(cotizacion_id)).execute()
     return await cargar_detalle(db, storage, cotizacion_id)

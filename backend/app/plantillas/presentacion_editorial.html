@@ -374,7 +374,7 @@
     {% endif %}
     {% if mostrar_precios %}<p>{{ nota_moneda }}</p>{% endif %}
     {% if hay_conceptuales %}<p>{{ t.nota_conceptuales }}</p>{% endif %}
-    <p>{{ fecha }}{% if referencia %} · {{ t.referencia }} {{ referencia }}{% endif %} · minimalcuatrocero.com</p>
+    <p>{% if fecha_evento %}{{ fecha_evento }} · {% endif %}{% if referencia %}{{ t.referencia }} {{ referencia }} · {% endif %}minimalcuatrocero.com</p>
   </div>
 </section>
 

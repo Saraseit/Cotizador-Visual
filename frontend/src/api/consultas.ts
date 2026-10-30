@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './cliente'
 import type {
   EditarPartida,
+  FechaEvento,
   NuevaPartida,
   AjustesPropuesta,
   AjustesPropuestaEntrada,
@@ -166,6 +167,15 @@ export function useGuardarCampos(cotizacionId: string) {
   return useMutation({
     mutationKey: llaveEdicion(cotizacionId),
     mutationFn: (valores: Record<string, string>) => api.cotizaciones.guardarCampos(cotizacionId, valores),
+    onSettled: (detalle) => alTerminar(detalle),
+  })
+}
+
+export function useGuardarFechaEvento(cotizacionId: string) {
+  const alTerminar = useAlTerminarEdicion(cotizacionId)
+  return useMutation({
+    mutationKey: llaveEdicion(cotizacionId),
+    mutationFn: (fechas: FechaEvento) => api.cotizaciones.guardarFechaEvento(cotizacionId, fechas),
     onSettled: (detalle) => alTerminar(detalle),
   })
 }

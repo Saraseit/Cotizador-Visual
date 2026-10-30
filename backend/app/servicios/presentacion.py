@@ -42,7 +42,7 @@ from app.db.modelos import (
     SeccionPresentacion,
     SeccionVista,
 )
-from app.servicios import idiomas
+from app.servicios import fechas, idiomas
 from app.servicios.compuestos import Renglon, categoria_efectiva, renglones
 from app.servicios.render_pdf import formatear_cantidad, html_a_pdf
 
@@ -605,7 +605,8 @@ def construir_contexto(
         "nota_moneda": nota_moneda(config, t, hoy),
         "referencia": detalle.referencia_externa,
         "cliente": detalle.nombre_cliente,
-        "fecha": hoy.strftime("%d/%m/%Y") if config.idioma == "es" else hoy.strftime("%m/%d/%Y"),
+        # La del evento, no la de impresión: es el dato que el cliente reconoce.
+        "fecha_evento": fechas.texto_evento(detalle.fecha_evento, detalle.fecha_evento_fin, config.idioma),
     }
 
 

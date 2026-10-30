@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import type {
   CambioHistorial,
   EditarPartida,
+  FechaEvento,
   NuevaPartida,
   AjustesPropuesta,
   AjustesPropuestaEntrada,
@@ -124,6 +125,8 @@ export const api = {
       peticion<CotizacionDetalle>(`/cotizaciones/${cotizacionId}/items/${itemId}/cargo`, json({ cargo }, 'PUT')),
     guardarCampos: (cotizacionId: string, valores: Record<string, string>) =>
       peticion<CotizacionDetalle>(`/cotizaciones/${cotizacionId}/campos`, json({ valores }, 'PUT')),
+    guardarFechaEvento: (cotizacionId: string, fechas: FechaEvento) =>
+      peticion<CotizacionDetalle>(`/cotizaciones/${cotizacionId}/fecha-evento`, json(fechas, 'PUT')),
     pdfs: (cotizacionId: string) => peticion<PdfGenerado[]>(`/cotizaciones/${cotizacionId}/pdfs`),
     editarDescripcion: (cotizacionId: string, itemId: string, descripcion: string) =>
       peticion<CotizacionDetalle>(`/cotizaciones/${cotizacionId}/items/${itemId}/descripcion`, json({ descripcion }, 'PATCH')),

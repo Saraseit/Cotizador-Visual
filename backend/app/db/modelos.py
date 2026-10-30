@@ -4,7 +4,7 @@ Reflejan las tablas de Supabase (ver `supabase/migrations/`) más campos calcula
 (URL firmada de la imagen, estado del ítem, importes).
 """
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal
 from uuid import UUID
 
@@ -325,6 +325,10 @@ class CotizacionResumen(BaseModel):
     cuadre: Cuadre = Field(default_factory=Cuadre)
     # Valores de los campos extra del PDF (id del campo -> texto). Ver `AjustesPropuesta`.
     campos: dict[str, str] = Field(default_factory=dict)
+    # Día del evento: lo captura la vendedora (el export del sistema no lo trae) y es la fecha que
+    # se imprime en el encabezado de la propuesta. `fin` sólo en eventos de varios días.
+    fecha_evento: date | None = None
+    fecha_evento_fin: date | None = None
     # False si hay cambios hechos en ProVista que todavía no se aplican en el sistema principal.
     alineada: bool = True
 
@@ -753,3 +757,20 @@ class GuardarCampos(BaseModel):
     """Valores de los campos extra de una cotización. Vacío = se usa el predeterminado."""
 
     valores: dict[str, str] = Field(default_factory=dict, max_length=12)
+
+
+class FechaEvento(BaseModel):
+    """Cuándo es el evento. `fin` sólo si dura varios días; `null` en ambos deja la cotización sin fecha."""
+
+    fecha_evento: date | None = None
+    fecha_evento_fin: date | None = None
+
+    @model_validator(mode="after")
+    def _rango_coherente(self) -> "FechaEvento":
+        if self.fecha_evento_fin is None:
+            return self
+        if self.fecha_evento is None:
+            raise ValueError("Para poner el último día hace falta el primero.")
+        if self.fecha_evento_fin < self.fecha_evento:
+            raise ValueError("El evento no puede terminar antes de empezar.")
+        return self

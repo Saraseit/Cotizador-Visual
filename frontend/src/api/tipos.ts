@@ -298,6 +298,15 @@ export interface CotizacionResumen {
   alineada: boolean
   /** Valores de los campos extra del PDF: id del campo -> texto (fechas AAAA-MM-DD, horas HH:MM). */
   campos: Record<string, string>
+  /** Día del evento (AAAA-MM-DD). Es la fecha que sale en el encabezado de la propuesta. */
+  fecha_evento: string | null
+  /** Último día, sólo en eventos de varios días. */
+  fecha_evento_fin: string | null
+}
+
+export interface FechaEvento {
+  fecha_evento: string | null
+  fecha_evento_fin: string | null
 }
 
 export interface CotizacionDetalle extends CotizacionResumen {

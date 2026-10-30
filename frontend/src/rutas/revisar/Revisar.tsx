@@ -15,6 +15,7 @@ import { cantidad, formatoDinero } from '@/lib/formato'
 
 import { CombinarArticulos, EditorCompuesto, type PestanaCompuesto } from './ArticuloCompuesto'
 import { CamposPropuesta } from './CamposPropuesta'
+import { FechaEvento } from './FechaEvento'
 import { DescripcionEditable } from './DescripcionEditable'
 import { FormatoPropuesta } from './FormatoPropuesta'
 import { Historial } from './Historial'
@@ -30,7 +31,12 @@ const columna = createColumnHelper<CotizacionItem>()
 /** Cantidad o precio de una partida: se edita con un clic. Si difiere del sistema, abajo dice cuánto era. */
 function CeldaEditable({ valor, sistema, alEditar }: { valor: string; sistema: string | null; alEditar: () => void }) {
   return (
-    <button type="button" onClick={alEditar} title="Editar cantidad, precio o sección" className="group block w-full text-right tabular-nums hover:text-acento">
+    <button
+      type="button"
+      onClick={alEditar}
+      title="Editar cantidad, precio o sección"
+      className="group block w-full text-right tabular-nums hover:text-acento"
+    >
       <span className="border-b border-dotted border-texto-secundario/50 group-hover:border-acento">{valor}</span>
       {sistema !== null && <span className="block text-xs text-alerta-texto">sistema: {sistema}</span>}
     </button>
@@ -63,7 +69,10 @@ function filaDeCompuesto(compuesto: Compuesto, partidas: CotizacionItem[]): Coti
     item_id: null,
     item: null,
     tipo_item: 'catalogo',
-    codigo_origen: partidas.map((p) => p.codigo_origen).filter(Boolean).join(' + '),
+    codigo_origen: partidas
+      .map((p) => p.codigo_origen)
+      .filter(Boolean)
+      .join(' + '),
     descripcion_origen: compuesto.nombre,
     descripcion_editada: '',
     cantidad: compuesto.cantidad ?? 0,
@@ -143,7 +152,12 @@ export function Revisar() {
       if (!compuesto) unidades.push(partida)
       else if (!vistos.has(compuesto.id)) {
         vistos.add(compuesto.id)
-        unidades.push(filaDeCompuesto(compuesto, partidas.filter((p) => p.compuesto_id === compuesto.id)))
+        unidades.push(
+          filaDeCompuesto(
+            compuesto,
+            partidas.filter((p) => p.compuesto_id === compuesto.id),
+          ),
+        )
       }
     }
     return filtro === 'pendientes' ? unidades.filter((i) => i.estado === 'falta_imagen') : unidades
@@ -184,161 +198,179 @@ export function Revisar() {
       }
       const abrirCompuesto = (compuesto: Compuesto) => setCompuestoAbierto({ id: compuesto.id, pestana: 'fotos' })
       return [
-      columna.display({
-        id: 'miniatura',
-        header: 'Imagen',
-        cell: ({ row }) => {
-          // La casilla marca la partida para combinarla en un artículo compuesto.
-          const compuesto = compuestoDe(row.original)
-          return (
-            <div className="flex items-center gap-3">
-              {compuesto ? (
-                <span className="w-4" aria-hidden />
-              ) : (
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 accent-acento"
-                  checked={seleccion.has(row.original.id)}
-                  onChange={() => alternarSeleccion(row.original.id)}
-                  aria-label={`Marcar ${row.original.descripcion_origen} para combinar`}
-                  title="Marcar para combinar en un artículo"
+        columna.display({
+          id: 'miniatura',
+          header: 'Imagen',
+          cell: ({ row }) => {
+            // La casilla marca la partida para combinarla en un artículo compuesto.
+            const compuesto = compuestoDe(row.original)
+            return (
+              <div className="flex items-center gap-3">
+                {compuesto ? (
+                  <span className="w-4" aria-hidden />
+                ) : (
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-acento"
+                    checked={seleccion.has(row.original.id)}
+                    onChange={() => alternarSeleccion(row.original.id)}
+                    aria-label={`Marcar ${row.original.descripcion_origen} para combinar`}
+                    title="Marcar para combinar en un artículo"
+                  />
+                )}
+                <Miniatura
+                  url={row.original.imagen?.url}
+                  conceptual={row.original.es_render_conceptual}
+                  alt={row.original.descripcion_origen}
                 />
-              )}
-              <Miniatura url={row.original.imagen?.url} conceptual={row.original.es_render_conceptual} alt={row.original.descripcion_origen} />
-            </div>
-          )
-        },
-      }),
-      columna.accessor('codigo_origen', {
-        header: 'Código',
-        cell: ({ getValue, row }) => {
-          const compuesto = compuestoDe(row.original)
-          return (
-            <div>
-              {compuesto ? (
-                <span className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-acento">
-                  <Layers className="h-3.5 w-3.5" aria-hidden /> Compuesto
+              </div>
+            )
+          },
+        }),
+        columna.accessor('codigo_origen', {
+          header: 'Código',
+          cell: ({ getValue, row }) => {
+            const compuesto = compuestoDe(row.original)
+            return (
+              <div>
+                {compuesto ? (
+                  <span className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-acento">
+                    <Layers className="h-3.5 w-3.5" aria-hidden /> Compuesto
+                  </span>
+                ) : (
+                  <span className="font-medium">{getValue() || '—'}</span>
+                )}
+                {row.original.tipo_item === 'ad_hoc' && !compuesto && <p className="text-xs text-texto-secundario">Fuera de catálogo</p>}
+                {row.original.origen === 'provista' && !compuesto && (
+                  <p className="text-xs font-medium text-alerta-texto" title="No está en el sistema principal">
+                    Agregada aquí
+                  </p>
+                )}
+              </div>
+            )
+          },
+        }),
+        columna.accessor('descripcion_origen', {
+          header: 'Descripción',
+          cell: ({ row }) => {
+            const compuesto = compuestoDe(row.original)
+            if (!compuesto) {
+              return (
+                <DescripcionEditable
+                  item={row.original}
+                  cotizacionId={id ?? ''}
+                  traduccion={traducciones[row.original.descripcion_origen]}
+                />
+              )
+            }
+            return (
+              <button type="button" onClick={() => abrirCompuesto(compuesto)} className="block max-w-md text-left hover:text-acento">
+                <span>{compuesto.nombre}</span>
+                <span className="block text-xs text-texto-secundario">
+                  {partidasDe(compuesto)
+                    .map((p) => `${cantidad(p.cantidad)} × ${p.codigo_origen || p.descripcion_origen}`)
+                    .join(' + ')}
                 </span>
-              ) : (
-                <span className="font-medium">{getValue() || '—'}</span>
-              )}
-              {row.original.tipo_item === 'ad_hoc' && !compuesto && <p className="text-xs text-texto-secundario">Fuera de catálogo</p>}
-              {row.original.origen === 'provista' && !compuesto && (
-                <p className="text-xs font-medium text-alerta-texto" title="No está en el sistema principal">
-                  Agregada aquí
-                </p>
-              )}
-            </div>
-          )
-        },
-      }),
-      columna.accessor('descripcion_origen', {
-        header: 'Descripción',
-        cell: ({ row }) => {
-          const compuesto = compuestoDe(row.original)
-          if (!compuesto) {
-            return <DescripcionEditable item={row.original} cotizacionId={id ?? ''} traduccion={traducciones[row.original.descripcion_origen]} />
-          }
-          return (
-            <button type="button" onClick={() => abrirCompuesto(compuesto)} className="block max-w-md text-left hover:text-acento">
-              <span>{compuesto.nombre}</span>
-              <span className="block text-xs text-texto-secundario">
-                {partidasDe(compuesto)
-                  .map((p) => `${cantidad(p.cantidad)} × ${p.codigo_origen || p.descripcion_origen}`)
-                  .join(' + ')}
+              </button>
+            )
+          },
+        }),
+        columna.accessor('cantidad', {
+          header: () => <span className="block text-right">Cantidad</span>,
+          cell: ({ getValue, row }) => {
+            const compuesto = compuestoDe(row.original)
+            if (!compuesto) {
+              const sistema = row.original.cantidad_sistema
+              return (
+                <CeldaEditable
+                  valor={cantidad(getValue())}
+                  sistema={row.original.origen === 'sistema' && sistema !== null && sistema !== getValue() ? cantidad(sistema) : null}
+                  alEditar={() => setPartidaEditando(row.original)}
+                />
+              )
+            }
+            const valor = compuesto.cantidad
+            return <span className="block text-right tabular-nums">{valor === null ? '—' : cantidad(valor)}</span>
+          },
+        }),
+        columna.accessor('precio_unitario', {
+          header: () => <span className="block text-right">Precio</span>,
+          cell: ({ getValue, row }) => {
+            const compuesto = compuestoDe(row.original)
+            if (!compuesto) {
+              const sistema = row.original.precio_sistema
+              return (
+                <CeldaEditable
+                  valor={dinero(getValue())}
+                  sistema={
+                    row.original.origen === 'sistema' && sistema !== null && Math.abs(sistema - getValue()) >= 0.005
+                      ? dinero(sistema)
+                      : null
+                  }
+                  alEditar={() => setPartidaEditando(row.original)}
+                />
+              )
+            }
+            const cambiado = Math.abs(compuesto.importe - compuesto.importe_partidas) >= 0.005
+            return (
+              <span className="block text-right tabular-nums">
+                {compuesto.precio_unitario === null ? '—' : dinero(compuesto.precio_unitario)}
+                {cambiado && (
+                  <span className="block text-xs text-alerta-texto" title="Precio distinto al de las partidas en el PDF del sistema">
+                    partidas: {dinero(compuesto.importe_partidas)}
+                  </span>
+                )}
               </span>
-            </button>
-          )
-        },
-      }),
-      columna.accessor('cantidad', {
-        header: () => <span className="block text-right">Cantidad</span>,
-        cell: ({ getValue, row }) => {
-          const compuesto = compuestoDe(row.original)
-          if (!compuesto) {
-            const sistema = row.original.cantidad_sistema
-            return (
-              <CeldaEditable
-                valor={cantidad(getValue())}
-                sistema={row.original.origen === 'sistema' && sistema !== null && sistema !== getValue() ? cantidad(sistema) : null}
-                alEditar={() => setPartidaEditando(row.original)}
-              />
             )
-          }
-          const valor = compuesto.cantidad
-          return <span className="block text-right tabular-nums">{valor === null ? '—' : cantidad(valor)}</span>
-        },
-      }),
-      columna.accessor('precio_unitario', {
-        header: () => <span className="block text-right">Precio</span>,
-        cell: ({ getValue, row }) => {
-          const compuesto = compuestoDe(row.original)
-          if (!compuesto) {
-            const sistema = row.original.precio_sistema
-            return (
-              <CeldaEditable
-                valor={dinero(getValue())}
-                sistema={row.original.origen === 'sistema' && sistema !== null && Math.abs(sistema - getValue()) >= 0.005 ? dinero(sistema) : null}
-                alEditar={() => setPartidaEditando(row.original)}
+          },
+        }),
+        columna.accessor('estado', {
+          header: 'Estado',
+          cell: ({ getValue }) => <PildoraEstadoItem estado={getValue()} />,
+        }),
+        columna.display({
+          id: 'tipo',
+          header: 'Tipo',
+          cell: ({ row }) =>
+            compuestoDe(row.original) ? (
+              <span className="text-sm text-texto-secundario">Artículo</span>
+            ) : (
+              <SelectorTipo
+                item={row.original}
+                ocupado={cambiandoCargo}
+                alCambiar={(cargo) => mutarCargo({ itemId: row.original.id, cargo })}
               />
-            )
-          }
-          const cambiado = Math.abs(compuesto.importe - compuesto.importe_partidas) >= 0.005
-          return (
-            <span className="block text-right tabular-nums">
-              {compuesto.precio_unitario === null ? '—' : dinero(compuesto.precio_unitario)}
-              {cambiado && (
-                <span className="block text-xs text-alerta-texto" title="Precio distinto al de las partidas en el PDF del sistema">
-                  partidas: {dinero(compuesto.importe_partidas)}
-                </span>
-              )}
-            </span>
-          )
-        },
-      }),
-      columna.accessor('estado', {
-        header: 'Estado',
-        cell: ({ getValue }) => <PildoraEstadoItem estado={getValue()} />,
-      }),
-      columna.display({
-        id: 'tipo',
-        header: 'Tipo',
-        cell: ({ row }) =>
-          compuestoDe(row.original) ? (
-            <span className="text-sm text-texto-secundario">Artículo</span>
-          ) : (
-            <SelectorTipo
-              item={row.original}
-              ocupado={cambiandoCargo}
-              alCambiar={(cargo) => mutarCargo({ itemId: row.original.id, cargo })}
-            />
-          ),
-      }),
-      columna.display({
-        id: 'accion',
-        header: '',
-        cell: ({ row }) => {
-          const falta = row.original.estado === 'falta_imagen'
-          const compuesto = compuestoDe(row.original)
-          if (compuesto) {
+            ),
+        }),
+        columna.display({
+          id: 'accion',
+          header: '',
+          cell: ({ row }) => {
+            const falta = row.original.estado === 'falta_imagen'
+            const compuesto = compuestoDe(row.original)
+            if (compuesto) {
+              return (
+                <Boton
+                  variante={falta ? 'primario' : 'secundario'}
+                  icono={<Layers className="h-4 w-4" />}
+                  onClick={() => abrirCompuesto(compuesto)}
+                >
+                  Editar
+                </Boton>
+              )
+            }
             return (
-              <Boton variante={falta ? 'primario' : 'secundario'} icono={<Layers className="h-4 w-4" />} onClick={() => abrirCompuesto(compuesto)}>
-                Editar
+              <Boton
+                variante={falta ? 'primario' : 'secundario'}
+                icono={falta ? <ImagePlus className="h-4 w-4" /> : <RefreshCw className="h-4 w-4" />}
+                onClick={() => setItemAbierto(row.original)}
+              >
+                {falta ? 'Elegir imagen' : 'Cambiar'}
               </Boton>
             )
-          }
-          return (
-            <Boton
-              variante={falta ? 'primario' : 'secundario'}
-              icono={falta ? <ImagePlus className="h-4 w-4" /> : <RefreshCw className="h-4 w-4" />}
-              onClick={() => setItemAbierto(row.original)}
-            >
-              {falta ? 'Elegir imagen' : 'Cambiar'}
-            </Boton>
-          )
-        },
-      }),
-    ]
+          },
+        }),
+      ]
     },
     // `dinero` y `traducciones` dependen de la moneda y el idioma elegidos.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -367,9 +399,7 @@ export function Revisar() {
   }
 
   const porcentaje = total === 0 ? 0 : Math.round((resueltos / total) * 100)
-  const seleccionadas = cotizacion.items
-    .filter((i) => seleccion.has(i.id) && !i.cargo && !i.compuesto_id)
-    .sort((a, b) => a.orden - b.orden)
+  const seleccionadas = cotizacion.items.filter((i) => seleccion.has(i.id) && !i.cargo && !i.compuesto_id).sort((a, b) => a.orden - b.orden)
   const columnasVisibles = tabla.getVisibleLeafColumns().length
   const ordenando = filtro === 'todos' && filas.length > 0
 
@@ -432,6 +462,15 @@ export function Revisar() {
       <AvisoAlineacion cotizacionId={cotizacion.id} alineacion={cotizacion.alineacion} className="mt-6" />
       <AvisoCuadre cuadre={cotizacion.cuadre} className="mt-6" />
 
+      {/* Arriba y fuera de las pestañas: sin fecha de evento la propuesta sale sin fecha. */}
+      <FechaEvento
+        key={`${cotizacion.fecha_evento}|${cotizacion.fecha_evento_fin}`}
+        className="mt-6 max-w-md"
+        cotizacionId={cotizacion.id}
+        fechaEvento={cotizacion.fecha_evento}
+        fechaEventoFin={cotizacion.fecha_evento_fin}
+      />
+
       {fotosImportadas > 0 && (
         <Aviso tono="info" className="mt-6">
           Se {fotosImportadas === 1 ? 'guardó 1 foto' : `guardaron ${fotosImportadas} fotos`} del PDF en la biblioteca de sus artículos. Ya
@@ -491,11 +530,17 @@ export function Revisar() {
             alReordenar={alReordenar}
             accionesSeccion={(titulo) => (
               <>
-                <BotonIcono etiqueta={`Renombrar la sección ${nombreSeccion(titulo)}`} onClick={() => setSeccionAbierta({ titulo, modo: 'renombrar' })}>
+                <BotonIcono
+                  etiqueta={`Renombrar la sección ${nombreSeccion(titulo)}`}
+                  onClick={() => setSeccionAbierta({ titulo, modo: 'renombrar' })}
+                >
                   <Pencil className="h-3.5 w-3.5" />
                 </BotonIcono>
                 {secciones.length > 1 && (
-                  <BotonIcono etiqueta={`Quitar la sección ${nombreSeccion(titulo)}`} onClick={() => setSeccionAbierta({ titulo, modo: 'quitar' })}>
+                  <BotonIcono
+                    etiqueta={`Quitar la sección ${nombreSeccion(titulo)}`}
+                    onClick={() => setSeccionAbierta({ titulo, modo: 'quitar' })}
+                  >
                     <X className="h-3.5 w-3.5" />
                   </BotonIcono>
                 )}

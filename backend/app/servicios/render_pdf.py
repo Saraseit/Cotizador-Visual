@@ -26,7 +26,7 @@ from app.db.modelos import (
     CotizacionItem,
     descripcion_impresa,
 )
-from app.servicios import ajustes_propuesta, idiomas
+from app.servicios import ajustes_propuesta, fechas, idiomas
 from app.servicios.compuestos import Renglon, categoria_efectiva, renglones
 
 DIR_PLANTILLAS = Path(__file__).resolve().parent.parent / "plantillas"
@@ -171,9 +171,12 @@ def construir_contexto(
         totales.append((t["montaje"], dinero(detalle.montaje)))
     if detalle.iva is not None:
         totales.append((t["iva"], dinero(detalle.iva)))
-    ahora = datetime.now()
-    fecha = ahora.strftime("%d/%m/%Y") if not config or config.idioma == "es" else ahora.strftime("%m/%d/%Y")
     idioma = config.idioma if config else "es"
+    # Al cliente le importa cuándo es su evento, no cuándo se imprimió el PDF. La fecha de hoy sólo
+    # sigue al pie, como referencia del tipo de cambio.
+    fecha_evento = fechas.texto_evento(detalle.fecha_evento, detalle.fecha_evento_fin, idioma)
+    ahora = datetime.now()
+    hoy = ahora.strftime("%d/%m/%Y") if idioma == "es" else ahora.strftime("%m/%d/%Y")
     return {
         "t": t,
         "idioma": idioma,
@@ -184,10 +187,10 @@ def construir_contexto(
         "campos": ajustes_propuesta.campos_impresos(ajustes, detalle.campos, idioma),
         "notas_titulo": ajustes.notas_titulo.strip(),
         "notas": [r.rstrip() for r in ajustes.notas.strip().splitlines()] if ajustes.notas.strip() else [],
-        "nota_moneda": _nota_moneda(config, t, fecha),
+        "nota_moneda": _nota_moneda(config, t, hoy),
         "nombre_cliente": detalle.nombre_cliente,
         "referencia_externa": detalle.referencia_externa,
-        "fecha": fecha,
+        "fecha_evento": fecha_evento,
         "items": items,
         "secciones": agrupar_en_secciones(items, [traducir(seccion_de[r.primero.id]) for r in filas]),
         "totales": totales,
