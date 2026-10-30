@@ -57,6 +57,13 @@ function Cambio({ cambio, alRestaurar, restaurando }: { cambio: CambioSistema; a
           Precio de {nombre}: {moneda(Number(cambio.antes))} → {moneda(Number(cambio.despues))}
         </>
       )
+    case 'dias':
+      return (
+        <>
+          <span className="font-medium">Días cobrados</span>: {cantidad(Number(cambio.antes))} en el sistema →{' '}
+          {cantidad(Number(cambio.despues))} aquí. Cambia el DIAS de la cotización en el sistema.
+        </>
+      )
     default:
       return null
   }
@@ -67,7 +74,15 @@ function Cambio({ cambio, alRestaurar, restaurando }: { cambio: CambioSistema; a
  * quitadas, cantidades, precios, secciones) que el sistema todavía no tiene. No bloquea los PDF. Al
  * marcar la casilla, lo de ProVista pasa a ser lo del sistema y el aviso desaparece.
  */
-export function AvisoAlineacion({ cotizacionId, alineacion, className = '' }: { cotizacionId: string; alineacion: Alineacion; className?: string }) {
+export function AvisoAlineacion({
+  cotizacionId,
+  alineacion,
+  className = '',
+}: {
+  cotizacionId: string
+  alineacion: Alineacion
+  className?: string
+}) {
   const alinear = useAlinear(cotizacionId)
   const restaurar = useRestaurarPartida(cotizacionId)
   const [marcada, setMarcada] = useState(false)
@@ -76,7 +91,10 @@ export function AvisoAlineacion({ cotizacionId, alineacion, className = '' }: { 
   const error = alinear.error ?? restaurar.error
 
   return (
-    <div role="alert" className={`rounded-boton border border-alerta-borde bg-alerta-fondo px-4 py-3 text-sm text-alerta-texto ${className}`}>
+    <div
+      role="alert"
+      className={`rounded-boton border border-alerta-borde bg-alerta-fondo px-4 py-3 text-sm text-alerta-texto ${className}`}
+    >
       <p className="font-semibold">Cotización no alineada al sistema principal</p>
       <p className="mt-1">
         Se hicieron cambios en ProVista que el sistema principal todavía no tiene. Los PDF se pueden generar igual; cuando se confirmen,
@@ -84,8 +102,12 @@ export function AvisoAlineacion({ cotizacionId, alineacion, className = '' }: { 
       </p>
       <ul className="mt-2 list-disc space-y-1 pl-5">
         {otros.map((cambio) => (
-          <li key={`${cambio.tipo}:${cambio.item_id}`}>
-            <Cambio cambio={cambio} restaurando={restaurar.isPending} alRestaurar={() => restaurar.mutate(cambio.item_id)} />
+          <li key={`${cambio.tipo}:${cambio.item_id ?? 'cotizacion'}`}>
+            <Cambio
+              cambio={cambio}
+              restaurando={restaurar.isPending}
+              alRestaurar={() => cambio.item_id && restaurar.mutate(cambio.item_id)}
+            />
           </li>
         ))}
         {secciones.map((grupo) => (
@@ -104,7 +126,12 @@ export function AvisoAlineacion({ cotizacionId, alineacion, className = '' }: { 
       {error && <p className="mt-2 font-medium">{mensajeDeError(error)}</p>}
       <div className="mt-3 border-t border-alerta-borde pt-3">
         <label className="flex cursor-pointer items-start gap-2 font-medium">
-          <input type="checkbox" className="mt-0.5 h-4 w-4 accent-alerta-texto" checked={marcada} onChange={(e) => setMarcada(e.target.checked)} />
+          <input
+            type="checkbox"
+            className="mt-0.5 h-4 w-4 accent-alerta-texto"
+            checked={marcada}
+            onChange={(e) => setMarcada(e.target.checked)}
+          />
           Estos cambios ya están aplicados en el sistema principal
         </label>
         {marcada && (

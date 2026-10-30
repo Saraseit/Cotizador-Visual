@@ -8,7 +8,7 @@ from datetime import date, datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, computed_field, model_validator
 
 Rol = Literal["vendedor", "admin"]
 TipoImagen = Literal["oficial", "variante", "generada", "ambientacion", "montaje", "inspiracion"]
@@ -286,14 +286,15 @@ class Cuadre(BaseModel):
     diferencia_ediciones: float = 0
 
 
-TipoCambioSistema = Literal["agregada", "quitada", "cantidad", "precio", "seccion"]
+TipoCambioSistema = Literal["agregada", "quitada", "cantidad", "precio", "seccion", "dias"]
 
 
 class CambioSistema(BaseModel):
     """Una diferencia entre la cotización en ProVista y el sistema principal."""
 
     tipo: TipoCambioSistema
-    item_id: UUID
+    # None en los cambios de toda la cotización ('dias': días cobrados distintos a los del sistema).
+    item_id: UUID | None = None
     codigo: str = ""
     descripcion: str = ""
     # Cantidad o precio (número) o sección (texto). En 'agregada' y 'quitada', cantidad × precio en `despues`/`antes`.
@@ -325,19 +326,39 @@ class CotizacionResumen(BaseModel):
     cuadre: Cuadre = Field(default_factory=Cuadre)
     # Valores de los campos extra del PDF (id del campo -> texto). Ver `AjustesPropuesta`.
     campos: dict[str, str] = Field(default_factory=dict)
-    # Día del evento: lo captura la vendedora (el export del sistema no lo trae) y es la fecha que
-    # se imprime en el encabezado de la propuesta. `fin` sólo en eventos de varios días.
+    # Día del evento: sale del "Fecha de evento:" del export y se puede corregir en Revisar. Es la
+    # fecha que se imprime en el encabezado de la propuesta. `fin` sólo en eventos de varios días.
     fecha_evento: date | None = None
     fecha_evento_fin: date | None = None
+    # Quién atiende al cliente (el "Atendió:" del export, corregible).
+    vendedor: str = ""
+    # Días: los del export (None = no se leyeron), los de renta y los cobrados (None = los mismos que
+    # los de renta). El mobiliario se cobra por día: su subtotal es la suma de partidas × días cobrados.
+    dias_documento: float | None = None
+    dias_renta: float = 1
+    dias_cobrados: float | None = None
     # False si hay cambios hechos en ProVista que todavía no se aplican en el sistema principal.
     alineada: bool = True
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def dias_cobrados_efectivos(self) -> float:
+        return self.dias_renta if self.dias_cobrados is None else self.dias_cobrados
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def dias_sistema(self) -> float:
+        """Por cuántos días multiplica el sistema principal (el DIAS del export; 1 si no se leyó)."""
+        return self.dias_documento or 1
 
 
 class CotizacionDetalle(CotizacionResumen):
     items: list[CotizacionItem] = Field(default_factory=list)
     compuestos: list[Compuesto] = Field(default_factory=list)
-    # Totales: subtotal de las partidas de mobiliario, cargos, IVA del PDF (None = "más IVA") y total.
+    # Totales: subtotal de las partidas de mobiliario (ya por los días cobrados), cargos, IVA del PDF
+    # (None = "más IVA") y total. `subtotal_por_dia` es la suma de las partidas, antes de los días.
     subtotal: float = 0
+    subtotal_por_dia: float = 0
     flete: float = 0
     montaje: float = 0
     iva: float | None = None
@@ -759,16 +780,33 @@ class GuardarCampos(BaseModel):
     valores: dict[str, str] = Field(default_factory=dict, max_length=12)
 
 
-class FechaEvento(BaseModel):
-    """Cuándo es el evento. `fin` sólo si dura varios días; `null` en ambos deja la cotización sin fecha."""
+class DatosEvento(BaseModel):
+    """Datos del evento que se capturan (o corrigen) en Revisar: fecha, vendedor y días.
+
+    `dias_cobrados` None = los mismos que los de renta (la casilla "días de renta = cobrados").
+    """
 
     fecha_evento: date | None = None
     fecha_evento_fin: date | None = None
+    vendedor: str = Field("", max_length=80)
+    dias_renta: float = Field(1, gt=0, le=365)
+    dias_cobrados: float | None = Field(None, gt=0, le=365)
 
     @model_validator(mode="after")
-    def _rango_coherente(self) -> "FechaEvento":
-        if self.fecha_evento_fin is None:
-            return self
+    def _coherente(self) -> "DatosEvento":
+        if self.fecha_evento_fin is not None:
+            if self.fecha_evento is None:
+                raise ValueError("Para poner el último día hace falta el primero.")
+            if self.fecha_evento_fin < self.fecha_evento:
+                raise ValueError("El evento no puede terminar antes de empezar.")
+        self.vendedor = self.vendedor.strip()
+        # La base guarda un decimal (medio día existe): se redondea aquí para validar lo que se guarda.
+        self.dias_renta = round(self.dias_renta, 1)
+        if self.dias_cobrados is not None:
+            self.dias_cobrados = round(self.dias_cobrados, 1)
+        if self.dias_renta <= 0 or (self.dias_cobrados is not None and self.dias_cobrados <= 0):
+            raise ValueError("Los días tienen que ser mayores que cero.")
+        return self
         if self.fecha_evento is None:
             raise ValueError("Para poner el último día hace falta el primero.")
         if self.fecha_evento_fin < self.fecha_evento:

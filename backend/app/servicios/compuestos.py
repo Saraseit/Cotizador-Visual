@@ -172,21 +172,25 @@ def totales(
     compuestos: list[Compuesto],
     iva_documento: float | None,
     base_del_sistema: float | None = None,
+    dias: float = 1,
 ) -> dict[str, float | int | None]:
     """Subtotal de mobiliario (con el precio presentado de cada compuesto), cargos, IVA y total.
 
-    `items` son las partidas vigentes (sin las quitadas en Revisar). El IVA siempre se imprime: a la
-    tasa del PDF del sistema (IVA / subtotal del sistema) o, si el PDF sólo decía "más IVA", a la
-    general. Así un compuesto con otro precio o una partida editada lo ajustan solos.
+    `items` son las partidas vigentes (sin las quitadas en Revisar). El mobiliario se cobra por día:
+    su subtotal es la suma de las partidas por `dias` (los cobrados); flete y montaje van una vez,
+    como en el sistema principal. El IVA siempre se imprime: a la tasa del PDF del sistema (IVA /
+    subtotal del sistema) o, si el PDF sólo decía "más IVA", a la general. Así un compuesto con otro
+    precio, una partida editada o otros días cobrados lo ajustan solos.
     """
-    from app.servicios.alineacion import tasa_iva
+    from app.servicios.alineacion import base_actual, tasa_iva
 
     partidas = [i for i in sorted(items, key=lambda i: i.orden) if not i.cargo]
     filas = renglones(partidas, compuestos)
-    subtotal = round(sum(r.importe for r in filas), 2)
+    subtotal_por_dia = round(sum(r.importe for r in filas), 2)
+    subtotal = round(subtotal_por_dia * dias, 2)
     flete = round(sum(i.importe for i in items if i.cargo == "flete"), 2)
     montaje = round(sum(i.importe for i in items if i.cargo == "montaje"), 2)
-    base_sistema = sum(i.importe for i in items) if base_del_sistema is None else base_del_sistema
+    base_sistema = base_actual(items, dias) if base_del_sistema is None else base_del_sistema
     base = subtotal + flete + montaje
     tasa = tasa_iva(iva_documento, base_sistema)
     iva = round(base * tasa, 2)
@@ -194,6 +198,7 @@ def totales(
         iva = round(float(iva_documento), 2)  # sin cambios: el IVA exacto del PDF, sin redondeos nuestros
     return {
         "subtotal": subtotal,
+        "subtotal_por_dia": subtotal_por_dia,
         "flete": flete,
         "montaje": montaje,
         "iva": iva,
@@ -211,6 +216,7 @@ def cuadre(
     subtotal_documento: float | None,
     iva_documento: float | None,
     base_del_sistema: float | None = None,
+    dias: float = 1,
 ) -> Cuadre:
     """¿El total de la propuesta es el del PDF del sistema?
 
@@ -219,9 +225,11 @@ def cuadre(
     Sin SubTotal (exports viejos o .xlsx) se usa la suma de las partidas leídas. La parte de la
     diferencia que viene de cambios hechos en Revisar no cuenta aquí: la avisa la alineación.
     """
-    from app.servicios.alineacion import tasa_iva
+    from app.servicios.alineacion import base_actual, tasa_iva
 
-    suma_partidas = round(sum(i.importe for i in items) if base_del_sistema is None else base_del_sistema, 2)
+    # Con días: mobiliario × días cobrados + cargos, que es como suma el sistema.
+    base_items = base_actual(items, dias)
+    suma_partidas = round(base_items if base_del_sistema is None else base_del_sistema, 2)
     referencia = subtotal_documento if subtotal_documento is not None else suma_partidas
     tasa = tasa_iva(iva_documento, suma_partidas)
     iva_referencia = float(iva_documento) if iva_documento is not None else referencia * tasa
@@ -238,7 +246,7 @@ def cuadre(
         if r.compuesto and r.precio_cambiado
     ]
     diferencia = round(total_propuesta - total_documento, 2)
-    diferencia_ediciones = round((sum(i.importe for i in items) - suma_partidas) * (1 + tasa), 2)
+    diferencia_ediciones = round((base_items - suma_partidas) * (1 + tasa), 2)
     lectura_ok = subtotal_documento is None or abs(suma_partidas - subtotal_documento) < TOLERANCIA_CUADRE
     return Cuadre(
         cuadra=abs(diferencia - diferencia_ediciones) < TOLERANCIA_CUADRE and lectura_ok,

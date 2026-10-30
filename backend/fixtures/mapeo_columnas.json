@@ -7,7 +7,8 @@
     "pdf: formato del sistema (PDF). estrategia 'auto' lee por renglones y, si no reconoce el formato, prueba tablas ('lineas', 'texto') con 'columnas'.",
     "pdf.encabezados: textos del renglón de encabezados que marca el inicio de las partidas en cada página.",
     "pdf.codigo_en_descripcion: regex con un grupo que extrae el código del inicio del artículo ('1040 - MESA ...').",
-    "pdf.metadatos: 'debajo_de' (palabra bajo una etiqueta), 'etiqueta' (texto a la derecha en el mismo renglón) o 'regex'; gana el primero con valor."
+    "pdf.metadatos: 'debajo_de' (palabra bajo una etiqueta), 'etiqueta' (texto a la derecha en el mismo renglón) o 'regex'; gana el primero con valor.",
+    "pdf.metadatos.fecha_evento/vendedor/dias: 'Fecha de evento:', 'Atendió:' y 'DIAS:' del encabezado y el pie. El sistema multiplica el mobiliario por DIAS (flete y montaje van una vez)."
   ],
   "formato": "pdf",
   "hoja": 0,
@@ -45,6 +46,15 @@
       "referencia_externa": {
         "debajo_de": "Cotización",
         "etiqueta": "Referencia:"
+      },
+      "fecha_evento": {
+        "regex": "Fecha de evento:?\\s*([^\\n]+)"
+      },
+      "vendedor": {
+        "regex": "Atendi[oó]:?\\s*([A-Za-zÁÉÍÓÚÑáéíóúñ]+)"
+      },
+      "dias": {
+        "regex": "\\bDIAS:\\s*([\\d.,]+)"
       }
     }
   }

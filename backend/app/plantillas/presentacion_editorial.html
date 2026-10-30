@@ -340,7 +340,7 @@
         <th>{{ t.seccion }}</th>
         <th class="num">{{ t.partidas|capitalize }}</th>
         <th class="num">{{ t.piezas|capitalize }}</th>
-        {% if mostrar_precios %}<th class="num">{{ t.importe }}</th>{% endif %}
+        {% if mostrar_precios %}<th class="num">{{ t.importe_por_dia if importe_por_dia else t.importe }}</th>{% endif %}
       </tr>
     </thead>
     <tbody>
@@ -373,8 +373,9 @@
       <p>{{ t.considera_flete_montaje if hay_flete and hay_montaje else (t.considera_flete if hay_flete else t.considera_montaje) }}</p>
     {% endif %}
     {% if mostrar_precios %}<p>{{ nota_moneda }}</p>{% endif %}
+    {% if nota_dias %}<p>{{ nota_dias }}</p>{% endif %}
     {% if hay_conceptuales %}<p>{{ t.nota_conceptuales }}</p>{% endif %}
-    <p>{% if fecha_evento %}{{ fecha_evento }} · {% endif %}{% if referencia %}{{ t.referencia }} {{ referencia }} · {% endif %}minimalcuatrocero.com</p>
+    <p>{% if fecha_evento %}{{ fecha_evento }} · {% endif %}{% if referencia %}{{ t.referencia }} {{ referencia }} · {% endif %}{% if vendedor %}{{ t.vendedor }}: {{ vendedor }} · {% endif %}minimalcuatrocero.com</p>
   </div>
 </section>
 

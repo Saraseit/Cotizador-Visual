@@ -10,7 +10,7 @@ import { AvisoCuadre } from '@/componentes/AvisoCuadre'
 import { Boton } from '@/componentes/Boton'
 import { Pildora } from '@/componentes/Pildora'
 import { moneda } from '@/lib/formato'
-import { textoEvento } from '@/rutas/revisar/FechaEvento'
+import { textoDias, textoEvento } from '@/rutas/revisar/DatosEvento'
 
 export function Generar() {
   const { id } = useParams<{ id: string }>()
@@ -50,6 +50,11 @@ export function Generar() {
           {cotizacion.fecha_evento && (
             <Pildora tono="neutro">Evento: {textoEvento(cotizacion.fecha_evento, cotizacion.fecha_evento_fin)}</Pildora>
           )}
+          <Pildora tono="neutro">
+            {textoDias(cotizacion.dias_renta)} de renta
+            {cotizacion.dias_cobrados_efectivos !== cotizacion.dias_renta &&
+              ` · se cobran ${textoDias(cotizacion.dias_cobrados_efectivos)}`}
+          </Pildora>
           {cotizacion.items_pendientes > 0 ? (
             <Pildora tono="pendiente">{cotizacion.items_pendientes} sin imagen</Pildora>
           ) : (

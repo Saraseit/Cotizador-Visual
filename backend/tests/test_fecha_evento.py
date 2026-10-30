@@ -5,7 +5,7 @@ from datetime import date, datetime
 import pytest
 from pydantic import ValidationError
 
-from app.db.modelos import FechaEvento
+from app.db.modelos import DatosEvento
 from app.servicios import fechas
 
 
@@ -30,17 +30,17 @@ def test_texto_evento(inicio: date | None, fin: date | None, idioma: str, espera
 
 def test_el_rango_al_reves_no_pasa() -> None:
     with pytest.raises(ValidationError, match="terminar antes de empezar"):
-        FechaEvento(fecha_evento=date(2026, 11, 30), fecha_evento_fin=date(2026, 11, 28))
+        DatosEvento(fecha_evento=date(2026, 11, 30), fecha_evento_fin=date(2026, 11, 28))
 
 
 def test_el_ultimo_dia_necesita_el_primero() -> None:
     with pytest.raises(ValidationError, match="hace falta el primero"):
-        FechaEvento(fecha_evento=None, fecha_evento_fin=date(2026, 11, 30))
+        DatosEvento(fecha_evento=None, fecha_evento_fin=date(2026, 11, 30))
 
 
 def test_sin_fechas_es_valido() -> None:
     """Quitar la fecha tiene que poder hacerse: la propuesta sale sin fecha, no rota."""
-    vacio = FechaEvento()
+    vacio = DatosEvento()
     assert vacio.fecha_evento is None and vacio.fecha_evento_fin is None
 
 

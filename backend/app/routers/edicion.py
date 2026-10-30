@@ -17,11 +17,13 @@ from app.db.cliente import ClienteDB
 from app.db.modelos import (
     CambioHistorial,
     CotizacionDetalle,
+    DatosEvento,
     EditarPartida,
     NuevaPartida,
     RenombrarSeccion,
 )
 from app.routers.cotizaciones import _fila_cotizacion, _puede_editar, cargar_detalle
+from app.servicios import alineacion as servicio_alineacion
 from app.servicios.cargos import clasificar_cargo
 from app.servicios.matching import elegir_imagen_sugerida, normalizar_codigo
 from app.servicios.render_pdf import formatear_cantidad, formatear_moneda
@@ -304,6 +306,41 @@ async def renombrar_seccion(
     return await cargar_detalle(db, storage, cotizacion_id)
 
 
+def _dias(valor: float) -> str:
+    return f"{formatear_cantidad(valor)} día{'' if valor == 1 else 's'}"
+
+
+@router.put("/{cotizacion_id}/evento", response_model=CotizacionDetalle)
+async def guardar_evento(
+    cotizacion_id: UUID, cuerpo: DatosEvento, usuario: Usuario, db: ClienteDB, storage: StorageDep
+) -> CotizacionDetalle:
+    """Fecha del evento, vendedor y días de renta y cobrados.
+
+    Salen del export al subir la cotización; aquí se corrigen. Los días mueven el subtotal (el
+    mobiliario se cobra por día), así que un cambio de días queda en el historial, y si los cobrados
+    ya no son los del sistema principal la alineación lo avisa.
+    """
+    await _editable(db, cotizacion_id, usuario)
+    antes = await cargar_detalle(db, storage, cotizacion_id)
+    await db.table("cotizaciones").update(cuerpo.model_dump(mode="json")).eq("id", str(cotizacion_id)).execute()
+    despues = await cargar_detalle(db, storage, cotizacion_id)
+
+    renta_antes, renta = antes.dias_renta, despues.dias_renta
+    cobrados_antes, cobrados = antes.dias_cobrados_efectivos, despues.dias_cobrados_efectivos
+    if renta_antes != renta or cobrados_antes != cobrados:
+        partes = []
+        if renta_antes != renta:
+            partes.append(f"renta de {_dias(renta_antes)} a {_dias(renta)}")
+        if cobrados_antes != cobrados:
+            partes.append(f"cobrados de {_dias(cobrados_antes)} a {_dias(cobrados)}")
+        await registrar(
+            db, cotizacion_id, usuario, "dias",
+            f"Cambió los días: {', '.join(partes)} (subtotal {formatear_moneda(antes.subtotal)} → {formatear_moneda(despues.subtotal)}).",
+            dias_renta=[renta_antes, renta], dias_cobrados=[cobrados_antes, cobrados],
+        )
+    return despues
+
+
 @router.post("/{cotizacion_id}/alinear", response_model=CotizacionDetalle)
 async def marcar_alineada(cotizacion_id: UUID, usuario: Usuario, db: ClienteDB, storage: StorageDep) -> CotizacionDetalle:
     """El vendedor ya aplicó en el sistema principal los cambios hechos aquí: lo de ProVista pasa a ser
@@ -313,15 +350,15 @@ async def marcar_alineada(cotizacion_id: UUID, usuario: Usuario, db: ClienteDB, 
     cambios = len(detalle.alineacion.cambios)
     if not cambios:
         return detalle
-    base_nueva = round(sum(i.importe for i in detalle.items), 2)
-    referencia: dict[str, Any] = {}
+    # Lo que hay en ProVista pasa a ser lo del sistema, días cobrados incluidos.
+    base_nueva = servicio_alineacion.base_actual(detalle.items, detalle.dias_cobrados_efectivos)
+    referencia: dict[str, Any] = {"dias_documento": str(detalle.dias_cobrados_efectivos)}
     if cotizacion.get("subtotal_documento") is not None:
         referencia["subtotal_documento"] = str(base_nueva)
     if cotizacion.get("iva_documento") is not None:
         referencia["iva_documento"] = str(round(base_nueva * detalle.tasa_iva, 2))
     await db.rpc("alinear_cotizacion", {"p_cotizacion": str(cotizacion_id)}).execute()
-    if referencia:
-        await db.table("cotizaciones").update(referencia).eq("id", str(cotizacion_id)).execute()
+    await db.table("cotizaciones").update(referencia).eq("id", str(cotizacion_id)).execute()
     await registrar(
         db, cotizacion_id, usuario, "alineada",
         f"Marcó que los cambios ya están en el sistema principal ({cambios} cambio{'s' if cambios != 1 else ''}).",

@@ -15,7 +15,7 @@ import { cantidad, formatoDinero } from '@/lib/formato'
 
 import { CombinarArticulos, EditorCompuesto, type PestanaCompuesto } from './ArticuloCompuesto'
 import { CamposPropuesta } from './CamposPropuesta'
-import { FechaEvento } from './FechaEvento'
+import { DatosEvento, textoDias } from './DatosEvento'
 import { DescripcionEditable } from './DescripcionEditable'
 import { FormatoPropuesta } from './FormatoPropuesta'
 import { Historial } from './Historial'
@@ -422,8 +422,15 @@ export function Revisar() {
     </thead>
   )
 
+  // El mobiliario se cobra por día: con más de un día cobrado se ve la cuenta, como en el PDF.
+  const dias = cotizacion.dias_cobrados_efectivos
   const totales: [string, number][] = [
-    ['Subtotal', cotizacion.subtotal],
+    ...(dias !== 1
+      ? ([
+          ['Mobiliario por día', cotizacion.subtotal_por_dia],
+          [`Subtotal · ${textoDias(dias)}`, cotizacion.subtotal],
+        ] as [string, number][])
+      : ([['Subtotal', cotizacion.subtotal]] as [string, number][])),
     ...(cotizacion.flete !== 0 ? ([['Flete', cotizacion.flete]] as [string, number][]) : []),
     ...(cotizacion.montaje !== 0 ? ([['Montaje', cotizacion.montaje]] as [string, number][]) : []),
     // El IVA siempre aparece: el del PDF del sistema o, si sólo decía "más IVA", calculado.
@@ -462,13 +469,18 @@ export function Revisar() {
       <AvisoAlineacion cotizacionId={cotizacion.id} alineacion={cotizacion.alineacion} className="mt-6" />
       <AvisoCuadre cuadre={cotizacion.cuadre} className="mt-6" />
 
-      {/* Arriba y fuera de las pestañas: sin fecha de evento la propuesta sale sin fecha. */}
-      <FechaEvento
-        key={`${cotizacion.fecha_evento}|${cotizacion.fecha_evento_fin}`}
-        className="mt-6 max-w-md"
-        cotizacionId={cotizacion.id}
-        fechaEvento={cotizacion.fecha_evento}
-        fechaEventoFin={cotizacion.fecha_evento_fin}
+      {/* Arriba y fuera de las pestañas: fecha, vendedor y días salen en el encabezado del PDF. */}
+      <DatosEvento
+        // Se reinicia cuando cambia lo guardado (al guardar o al recargar la cotización).
+        key={[
+          cotizacion.fecha_evento,
+          cotizacion.fecha_evento_fin,
+          cotizacion.vendedor,
+          cotizacion.dias_renta,
+          cotizacion.dias_cobrados,
+        ].join('|')}
+        className="mt-6 max-w-3xl"
+        cotizacion={cotizacion}
       />
 
       {fotosImportadas > 0 && (

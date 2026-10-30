@@ -41,6 +41,7 @@ import json
 import re
 import unicodedata
 from dataclasses import dataclass, field
+from datetime import date
 from decimal import Decimal, InvalidOperation
 from io import BytesIO
 from pathlib import Path
@@ -83,6 +84,11 @@ class ExportLeido:
     # SubTotal impreso en el PDF del sistema; None si no se encontró (o es un .xlsx). Con él Revisar
     # avisa cuando la propuesta no cuadra con el documento.
     subtotal: Decimal | None = None
+    # Del encabezado del export: "Fecha de evento:", "Atendió:" y "DIAS:". El sistema multiplica el
+    # mobiliario por DIAS (flete y montaje van una vez), así que sin ellos el SubTotal no se reconstruye.
+    fecha_evento: date | None = None
+    vendedor: str = ""
+    dias: Decimal | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -203,6 +209,46 @@ def _filas_desde_tabla(
             )
         )
     return filas
+
+
+MESES = {
+    "enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6, "julio": 7,
+    "agosto": 8, "septiembre": 9, "setiembre": 9, "octubre": 10, "noviembre": 11, "diciembre": 12,
+}
+_FECHA_LARGA = re.compile(r"(\d{1,2})\s+(?:de\s+)?([a-z]+)\s+(?:de(?:l)?\s+)?(\d{4})")
+_FECHA_NUMERICA = re.compile(r"(\d{1,2})/(\d{1,2})/(\d{4})")
+_FECHA_ISO = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
+
+
+def leer_fecha(texto: str) -> date | None:
+    """'viernes 30 octubre 2026', '30 de octubre de 2026', '30/10/2026' o '2026-10-30'; None si no es fecha."""
+    limpio = normalizar_texto(texto or "")
+    try:
+        if coincidencia := _FECHA_ISO.search(limpio):
+            ano, mes, dia = (int(g) for g in coincidencia.groups())
+            return date(ano, mes, dia)
+        if coincidencia := _FECHA_LARGA.search(limpio):
+            dia, nombre_mes, ano = coincidencia.groups()
+            if nombre_mes in MESES:
+                return date(int(ano), MESES[nombre_mes], int(dia))
+        if coincidencia := _FECHA_NUMERICA.search(limpio):
+            dia, mes, ano = (int(g) for g in coincidencia.groups())
+            return date(ano, mes, dia)
+    except ValueError:  # "31 febrero": mejor sin fecha que con una inventada
+        return None
+    return None
+
+
+def leer_dias(texto: str) -> Decimal | None:
+    """'3.0' -> 3.0; None si no hay número o no es positivo."""
+    coincidencia = re.search(r"\d+(?:[.,]\d+)?", texto or "")
+    if not coincidencia:
+        return None
+    try:
+        dias = Decimal(coincidencia.group(0).replace(",", "."))
+    except InvalidOperation:
+        return None
+    return dias if dias > 0 else None
 
 
 def _metadato_por_regex(texto: str, patron: str | None) -> str:
@@ -672,4 +718,7 @@ def leer_pdf(contenido: bytes, mapeo: dict[str, Any]) -> ExportLeido:
         advertencias=advertencias,
         iva=iva,
         subtotal=subtotal,
+        fecha_evento=leer_fecha(metadatos.get("fecha_evento", "")),
+        vendedor=metadatos.get("vendedor", "").strip()[:80],
+        dias=leer_dias(metadatos.get("dias", "")),
     )

@@ -1,4 +1,4 @@
-"""Cómo se imprime la fecha del evento en la propuesta.
+"""Cómo se imprimen la fecha del evento y los días en la propuesta.
 
 Un día suelto va completo. En un rango sólo se repite lo que haga falta: el año se dice una vez, y
 en español el mes también cuando es el mismo, que es como lo diría una persona.
@@ -24,6 +24,16 @@ def _inicio_de_rango(inicio: date, fin: date, idioma: str) -> str:
     if inicio.year == fin.year:
         return inicio.strftime("%d/%m")
     return _dia(inicio, idioma)
+
+
+def numero_de_dias(dias: float) -> str:
+    """3.0 -> '3', 1.5 -> '1.5'."""
+    return f"{dias:g}"
+
+
+def texto_dias(dias: float, t: dict[str, str]) -> str:
+    """'1 día', '3 días', '1.5 días' (o 'day'/'days'), con las palabras del idioma de `t`."""
+    return f"{numero_de_dias(dias)} {t['dia'] if dias == 1 else t['dias']}"
 
 
 def texto_evento(inicio: date | None, fin: date | None, idioma: str = "es") -> str:

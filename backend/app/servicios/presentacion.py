@@ -555,7 +555,15 @@ def construir_contexto(
         }
         for v in vistas
     ]
-    totales: list[tuple[str, str]] = [(t["subtotal_mobiliario"], dinero(detalle.subtotal))]
+    # Igual que el PDF base: con más de un día cobrado, la cuenta por día y luego por los días.
+    dias = detalle.dias_cobrados_efectivos
+    if dias != 1:
+        totales: list[tuple[str, str]] = [
+            (t["mobiliario_por_dia"], dinero(detalle.subtotal_por_dia)),
+            (t["subtotal_mobiliario_dias"].format(dias=fechas.texto_dias(dias, t)), dinero(detalle.subtotal)),
+        ]
+    else:
+        totales = [(t["subtotal_mobiliario"], dinero(detalle.subtotal))]
     hay_flete = any(i.cargo == "flete" for i in detalle.items)
     hay_montaje = any(i.cargo == "montaje" for i in detalle.items)
     if hay_flete:
@@ -605,9 +613,24 @@ def construir_contexto(
         "nota_moneda": nota_moneda(config, t, hoy),
         "referencia": detalle.referencia_externa,
         "cliente": detalle.nombre_cliente,
+        "vendedor": detalle.vendedor,
+        # Renglón de días en las notas: sólo si hay algo que decir (más de un día, o una promoción).
+        "nota_dias": _nota_dias(detalle, t),
+        "importe_por_dia": dias != 1,
         # La del evento, no la de impresión: es el dato que el cliente reconoce.
         "fecha_evento": fechas.texto_evento(detalle.fecha_evento, detalle.fecha_evento_fin, config.idioma),
     }
+
+
+def _nota_dias(detalle: CotizacionDetalle, t: dict[str, str]) -> str:
+    """'Días de renta: 3 · Días cobrados: 1'; vacío en el caso de siempre (un día, cobrado)."""
+    renta, cobrados = detalle.dias_renta, detalle.dias_cobrados_efectivos
+    if renta == 1 and cobrados == 1:
+        return ""
+    texto = f"{t['dias_renta']}: {fechas.numero_de_dias(renta)}"
+    if cobrados != renta:
+        texto += f" · {t['dias_cobrados']}: {fechas.numero_de_dias(cobrados)}"
+    return texto
 
 
 def nota_moneda(config: ConfigPresentacion, t: dict[str, str], hoy: datetime) -> str:

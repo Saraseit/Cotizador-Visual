@@ -237,12 +237,13 @@ export interface Cuadre {
   diferencia_ediciones: number
 }
 
-export type TipoCambioSistema = 'agregada' | 'quitada' | 'cantidad' | 'precio' | 'seccion'
+export type TipoCambioSistema = 'agregada' | 'quitada' | 'cantidad' | 'precio' | 'seccion' | 'dias'
 
 /** Una diferencia entre la cotización en ProVista y el sistema principal. */
 export interface CambioSistema {
   tipo: TipoCambioSistema
-  item_id: string
+  /** null en los cambios de toda la cotización ('dias'). */
+  item_id: string | null
   codigo: string
   descripcion: string
   /** Cantidad o precio (número) o sección (texto). En 'agregada'/'quitada', el importe. */
@@ -302,17 +303,35 @@ export interface CotizacionResumen {
   fecha_evento: string | null
   /** Último día, sólo en eventos de varios días. */
   fecha_evento_fin: string | null
+  /** Quién atiende al cliente (el "Atendió:" del export, corregible). */
+  vendedor: string
+  /** DIAS del export (null = no se leyó). El sistema multiplica el mobiliario por éstos. */
+  dias_documento: number | null
+  dias_renta: number
+  /** null = los mismos que los de renta (la casilla "días de renta = cobrados"). */
+  dias_cobrados: number | null
+  /** Los que de verdad se cobran: `dias_cobrados ?? dias_renta`. */
+  dias_cobrados_efectivos: number
+  /** Por cuántos días multiplica el sistema principal (1 si no se leyó). */
+  dias_sistema: number
 }
 
-export interface FechaEvento {
+/** Lo que se guarda desde la tarjeta "Datos del evento" de Revisar. */
+export interface DatosEvento {
   fecha_evento: string | null
   fecha_evento_fin: string | null
+  vendedor: string
+  dias_renta: number
+  dias_cobrados: number | null
 }
 
 export interface CotizacionDetalle extends CotizacionResumen {
   items: CotizacionItem[]
   compuestos: Compuesto[]
+  /** Mobiliario ya por los días cobrados. */
   subtotal: number
+  /** Suma de las partidas de mobiliario, antes de los días. */
+  subtotal_por_dia: number
   flete: number
   montaje: number
   /** Siempre viene: el del PDF del sistema o, si no traía, calculado a `tasa_iva`. */

@@ -20,7 +20,6 @@ from app.db.modelos import (
     CotizacionItem,
     CotizacionResumen,
     EditarDescripcion,
-    FechaEvento,
     GuardarCampos,
     PdfGenerado,
     Reordenar,
@@ -59,6 +58,17 @@ SELECT_RESUMEN = (
 # ---------------------------------------------------------------------------
 # Ayudantes
 # ---------------------------------------------------------------------------
+
+def dias_de_fila(fila: dict[str, Any]) -> tuple[float, float]:
+    """(días cobrados, días del sistema) de una fila cruda de `cotizaciones`.
+
+    Las mismas reglas que `CotizacionResumen`: cobrados vacío = los de renta; sin DIAS leído, 1.
+    """
+    renta = float(fila.get("dias_renta") or 1)
+    cobrados = float(fila["dias_cobrados"]) if fila.get("dias_cobrados") is not None else renta
+    sistema = float(fila["dias_documento"]) if fila.get("dias_documento") is not None else 1.0
+    return cobrados, sistema
+
 
 def _puede_editar(cotizacion: dict[str, Any], usuario: UsuarioActual) -> None:
     if str(cotizacion.get("creado_por")) != str(usuario.id) and not usuario.es_admin:
@@ -100,7 +110,7 @@ def _resumen_desde_fila(fila: dict[str, Any]) -> CotizacionResumen:
         total_items=len(unidades),
         items_pendientes=sum(1 for i in unidades if not con_imagen(i)),
         cuadre=_cuadre_de_fila(fila),
-        alineada=servicio_alineacion.esta_alineada(fila.get("cotizacion_items") or []),
+        alineada=servicio_alineacion.esta_alineada(fila.get("cotizacion_items") or [], *dias_de_fila(fila)),
     )
 
 
@@ -138,14 +148,17 @@ def _cuadre_de_fila(fila: dict[str, Any]) -> Any:
             )
         )
     items = [i for i in todas if not i.eliminada]
-    base = servicio_alineacion.base_sistema(todas)
+    cobrados, sistema = dias_de_fila(fila)
+    base = servicio_alineacion.base_sistema(todas, sistema)
     for compuesto in compuestos:
         compuesto.item_ids = [i.id for i in items if i.compuesto_id == compuesto.id]
     activos = [c for c in compuestos if c.item_ids]
     iva_documento = float(fila["iva_documento"]) if fila.get("iva_documento") is not None else None
     subtotal_documento = float(fila["subtotal_documento"]) if fila.get("subtotal_documento") is not None else None
-    total = servicio_compuestos.totales(items, activos, iva_documento, base)["total"]
-    return servicio_compuestos.cuadre(items, activos, float(total or 0), subtotal_documento, iva_documento, base)
+    total = servicio_compuestos.totales(items, activos, iva_documento, base, cobrados)["total"]
+    return servicio_compuestos.cuadre(
+        items, activos, float(total or 0), subtotal_documento, iva_documento, base, cobrados
+    )
 
 
 async def compuestos_crudos(db: Any, cotizacion_id: UUID | str) -> list[dict[str, Any]]:
@@ -211,7 +224,8 @@ async def _armar_detalle(
 
     # Las quitadas en Revisar no se ven ni se imprimen; sólo cuentan para la alineación y el cuadre.
     items = [i for i in todas if not i.eliminada]
-    base = servicio_alineacion.base_sistema(todas)
+    cobrados, sistema = dias_de_fila(fila)
+    base = servicio_alineacion.base_sistema(todas, sistema)
     activos = [c for c in modelos_compuestos.values() if c.item_ids]
     # Lo que presenta cada compuesto (cantidad, precio e importe según su modo de precio).
     partidas = [i for i in items if not i.cargo]
@@ -224,15 +238,17 @@ async def _armar_detalle(
 
     iva_documento = float(fila["iva_documento"]) if fila.get("iva_documento") is not None else None
     subtotal_documento = float(fila["subtotal_documento"]) if fila.get("subtotal_documento") is not None else None
-    totales = servicio_compuestos.totales(items, activos, iva_documento, base)
-    alineacion = servicio_alineacion.alineacion(todas)
+    totales = servicio_compuestos.totales(items, activos, iva_documento, base, cobrados)
+    alineacion = servicio_alineacion.alineacion(todas, cobrados, sistema)
     encabezado = {k: v for k, v in fila.items() if k != "cotizacion_items"}
     return CotizacionDetalle(
         **encabezado,
         items=items,
         compuestos=activos,
         **totales,
-        cuadre=servicio_compuestos.cuadre(items, activos, totales["total"], subtotal_documento, iva_documento, base),
+        cuadre=servicio_compuestos.cuadre(
+            items, activos, totales["total"], subtotal_documento, iva_documento, base, cobrados
+        ),
         alineacion=alineacion,
         alineada=alineacion.alineada,
         tasa_iva=round(servicio_alineacion.tasa_iva(iva_documento, base), 6),
@@ -240,13 +256,16 @@ async def _armar_detalle(
     )
 
 
-def calcular_totales(items: list[CotizacionItem], iva_documento: Any, compuestos: list[Compuesto] | None = None) -> dict[str, Any]:
-    """Subtotal de mobiliario, cargos por tipo, IVA del documento y total.
+def calcular_totales(
+    items: list[CotizacionItem], iva_documento: Any, compuestos: list[Compuesto] | None = None, dias: float = 1
+) -> dict[str, Any]:
+    """Subtotal de mobiliario (por los días cobrados), cargos por tipo, IVA del documento y total.
 
     El IVA siempre aparece: a la tasa del PDF del sistema o, si sólo decía "más IVA", a la general
     (ver `servicios/compuestos.totales`).
     """
-    return servicio_compuestos.totales(items, compuestos or [], float(iva_documento) if iva_documento is not None else None)
+    iva = float(iva_documento) if iva_documento is not None else None
+    return servicio_compuestos.totales(items, compuestos or [], iva, dias=dias)
 
 
 async def cargar_detalle(db: Any, storage: Any, cotizacion_id: UUID) -> CotizacionDetalle:
@@ -350,6 +369,11 @@ async def crear_cotizacion(
                 "estado": "revision",
                 "iva_documento": str(export.iva) if export.iva is not None else None,
                 "subtotal_documento": str(export.subtotal) if export.subtotal is not None else None,
+                # Del encabezado del export; todo se puede corregir después en Revisar.
+                "fecha_evento": export.fecha_evento.isoformat() if export.fecha_evento else None,
+                "vendedor": export.vendedor,
+                "dias_documento": str(export.dias) if export.dias is not None else None,
+                "dias_renta": str(export.dias) if export.dias is not None else "1",
             }
         )
         .execute()
@@ -597,17 +621,3 @@ async def guardar_campos(
     await db.table("cotizaciones").update({"campos": valores}).eq("id", str(cotizacion_id)).execute()
     return await cargar_detalle(db, storage, cotizacion_id)
 
-
-@router.put("/{cotizacion_id}/fecha-evento", response_model=CotizacionDetalle)
-async def guardar_fecha_evento(
-    cotizacion_id: UUID, cuerpo: FechaEvento, usuario: Usuario, db: ClienteDB, storage: StorageDep
-) -> CotizacionDetalle:
-    """Cuándo es el evento. Es la fecha que se imprime en el encabezado de la propuesta.
-
-    El export del sistema no la trae, así que se captura aquí. Sin fecha la propuesta se genera
-    igual (Revisar avisa), pero sale sin fecha en el encabezado.
-    """
-    cotizacion = await _fila_cotizacion(db, cotizacion_id, "*")
-    _puede_editar(cotizacion, usuario)
-    await db.table("cotizaciones").update(cuerpo.model_dump(mode="json")).eq("id", str(cotizacion_id)).execute()
-    return await cargar_detalle(db, storage, cotizacion_id)

@@ -177,6 +177,9 @@
       <div><strong>{{ t.cliente }}</strong> {{ nombre_cliente }}</div>
       <div><strong>{{ t.referencia }}</strong> {{ referencia_externa or "—" }}</div>
       {% if fecha_evento %}<div><strong>{{ t.fecha_evento }}</strong> {{ fecha_evento }}</div>{% endif %}
+      {% if vendedor %}<div><strong>{{ t.vendedor }}</strong> {{ vendedor }}</div>{% endif %}
+      <div><strong>{{ t.dias_renta }}</strong> {{ dias_renta }}</div>
+      {% if dias_cobrados %}<div><strong>{{ t.dias_cobrados }}</strong> {{ dias_cobrados }}</div>{% endif %}
       {% for etiqueta, valor in campos %}
       <div class="campo"><strong>{{ etiqueta }}</strong> {{ valor }}</div>
       {% endfor %}
@@ -190,7 +193,7 @@
         <th>{{ t.descripcion }}</th>
         <th class="col-cantidad">{{ t.cantidad_corta }}</th>
         <th class="col-precio">{{ t.precio_unitario }}</th>
-        <th class="col-importe">{{ t.importe }}</th>
+        <th class="col-importe">{{ t.importe_por_dia if importe_por_dia else t.importe }}</th>
       </tr>
     </thead>
     <tbody>

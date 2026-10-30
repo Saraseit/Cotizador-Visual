@@ -164,7 +164,16 @@ def construir_contexto(
     filas = renglones(partidas, detalle.compuestos)
     items = [renglon_a_render(r) for r in filas]
     seccion_de = categoria_efectiva(partidas, detalle.compuestos)
-    totales: list[tuple[str, str]] = [(t["subtotal_mobiliario"], dinero(detalle.subtotal))]
+    # El mobiliario se cobra por día: con más de un día cobrado se ve la cuenta completa (por día y
+    # por los días), como la hace el sistema. Con uno, igual que siempre.
+    dias = detalle.dias_cobrados_efectivos
+    if dias != 1:
+        totales: list[tuple[str, str]] = [
+            (t["mobiliario_por_dia"], dinero(detalle.subtotal_por_dia)),
+            (t["subtotal_mobiliario_dias"].format(dias=fechas.texto_dias(dias, t)), dinero(detalle.subtotal)),
+        ]
+    else:
+        totales = [(t["subtotal_mobiliario"], dinero(detalle.subtotal))]
     if any(i.cargo == "flete" for i in detalle.items):
         totales.append((t["flete"], dinero(detalle.flete)))
     if any(i.cargo == "montaje" for i in detalle.items):
@@ -191,6 +200,11 @@ def construir_contexto(
         "nombre_cliente": detalle.nombre_cliente,
         "referencia_externa": detalle.referencia_externa,
         "fecha_evento": fecha_evento,
+        "vendedor": detalle.vendedor,
+        "dias_renta": fechas.numero_de_dias(detalle.dias_renta),
+        # Sólo si es distinto: es lo que hace visible una promoción ("se rentan 3, se cobra 1").
+        "dias_cobrados": fechas.numero_de_dias(dias) if dias != detalle.dias_renta else "",
+        "importe_por_dia": dias != 1,
         "items": items,
         "secciones": agrupar_en_secciones(items, [traducir(seccion_de[r.primero.id]) for r in filas]),
         "totales": totales,
